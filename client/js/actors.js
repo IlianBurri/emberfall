@@ -99,12 +99,27 @@ function soldierGeometries(o) {
   // Waffe (vereinfachte Variante) und Arme, die sie halten
   const gun = buildGunModel(o.gun, {}, GUN_SKIN, { low: true });
   const info = gun.userData.info;
-  const gunPos = V(0.09, 0.36, -0.22);
-  tb.group(gun, new THREE.Matrix4().makeTranslation(gunPos.x, gunPos.y, gunPos.z));
-  const handR = V(gunPos.x + 0.012, gunPos.y + info.gripY, gunPos.z + info.gripZ);
-  const handL = info.pistol ? V(gunPos.x - 0.04, gunPos.y + info.gripY, gunPos.z + info.gripZ) : V(gunPos.x - 0.005, gunPos.y + info.supportY - 0.02, gunPos.z + info.supportZ);
   const shR = V(0.2, 0.455, 0.0), shL = V(-0.2, 0.455, 0.0);
-  const elR = V(0.23, 0.24, -0.07), elL = info.pistol ? V(-0.18, 0.25, -0.13) : V(-0.15, 0.27, -0.18);
+  let handR, handL, elR, elL;
+  if (o.pose === 'ready') {
+    // Menü-Pose „Low Ready“: Waffe schräg vor dem Bauch, Mündung zeigt nach unten-links (nicht auf den Betrachter),
+    // damit Gesicht und Brust frei bleiben.
+    const gm = new THREE.Matrix4().compose(
+      V(0.05, 0.17, -0.2),
+      new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.55, info.pistol ? -0.5 : -1.0, 0, 'YXZ')),
+      V(1, 1, 1));
+    tb.group(gun, gm);
+    handR = V(0.012, info.gripY, info.gripZ).applyMatrix4(gm);
+    handL = (info.pistol ? V(-0.04, info.gripY, info.gripZ) : V(-0.005, info.supportY - 0.02, info.supportZ)).applyMatrix4(gm);
+    elR = V(0.25, 0.2, -0.02);
+    elL = info.pistol ? V(-0.2, 0.22, -0.1) : V(-0.24, 0.24, -0.06);
+  } else {
+    const gunPos = V(0.09, 0.36, -0.22);
+    tb.group(gun, new THREE.Matrix4().makeTranslation(gunPos.x, gunPos.y, gunPos.z));
+    handR = V(gunPos.x + 0.012, gunPos.y + info.gripY, gunPos.z + info.gripZ);
+    handL = info.pistol ? V(gunPos.x - 0.04, gunPos.y + info.gripY, gunPos.z + info.gripZ) : V(gunPos.x - 0.005, gunPos.y + info.supportY - 0.02, gunPos.z + info.supportZ);
+    elR = V(0.23, 0.24, -0.07); elL = info.pistol ? V(-0.18, 0.25, -0.13) : V(-0.15, 0.27, -0.18);
+  }
   tb.limb(uni, shR, elR, 0.056); tb.limb(shade(uni, 0.93), elR, handR, 0.047);
   tb.limb(uni, shL, elL, 0.056); tb.limb(shade(uni, 0.93), elL, handL, 0.047);
   for (const h of [handR, handL]) tb.rbox(glove, h.x, h.y, h.z, 0.06, 0.075, 0.085, 0, 0, 0, 0.025);
@@ -130,6 +145,7 @@ export function makeSoldier(color, opts = {}) {
     color, gun: opts.gun || 'falke', vest: opts.vest || '#3d3c34', skin: opts.skin || '#d9a877', eye: opts.eye || '#2ae0ff',
     helmet: opts.helmet || shade(color, 0.6), mask: opts.mask || false, boss: !!opts.boss, pack: opts.pack !== false,
     pants: opts.pants || null, headgear: opts.headgear || 'helm', maskColor: opts.maskColor || null,
+    pose: opts.pose || 'aim',
   };
   const geo = soldierGeometries(o);
   const g = new THREE.Group();

@@ -63,6 +63,14 @@ G Granate · Shift sprinten · C ducken · Leertaste springen · Tab Punktestand
 - **Shop:** Waffen, Aufsätze, Ausrüstung und ein Reiter **Codes** – der richtige Code schaltet das Cheat-Menü frei
   (Wallhack, ESP, Aimbot, Speed, Jump, Max-Leben, Godmode, unendlich Munition, kein Rückstoß, Feuerrate; auch im Pause-Menü).
 - **Fortschritt:** wird im Browser (localStorage) gespeichert – jeder Spieler auf seinem eigenen Gerät.
+- **Hauptmenü:** Lobby mit linker Navigation (Spielen, Loadout, Arsenal, Battle Pass, Quests, Einstellungen), Topbar mit Profil,
+  Rang/XP, Pass-Stufe und Splittern. Dein Soldat steht in einem eigenen Hangar (nicht die Spielwelt) frontal zur Kamera –
+  ohne automatische Drehung, nur leichtes Atmen. Waffen in der Großansicht lassen sich per Ziehen mit der Maus drehen. Esc schließt Panels.
+- **Battle Pass „Glutfunken“:** 50 Stufen (in `data.js` → `BATTLE_PASS` einstellbar), 1000 XP pro Stufe. Pass-XP gibt es für jede Runde
+  (gleich viel wie Rang-XP), +400 pro Tagesauftrag, +250 pro Auftrag. Gratis-Spur mit Splittern, XP-Boostern (+25 % für einige Runden),
+  exklusiven Skins, Outfit-Teilen, Emblemen und Profil-Bannern. Belohnungen einzeln oder mit „Alle abholen“ einlösen – doppeltes Abholen
+  ist ausgeschlossen. Die **Premium-Spur ist nur eine Vorschau**: Es gibt keinen Kauf und kein Echtgeld.
+  *Grenze:* Der Pass ist ein lokaler Prototyp im localStorage – nicht manipulationssicher und nicht serverseitig geprüft.
 
 - **Maps:** Stadt mit Stadtmauer und Toren, drumherum ein Umland mit Hügeln, Feldwegen, Wäldern, Felsen und Orten
   (Bauernhof, Funkhügel, Tankstelle, Tanklager, Depot, Weiler). Berge am Rand bilden die natürliche Grenze, bei Hafen-Maps das Meer.
@@ -72,6 +80,8 @@ G Granate · Shift sprinten · C ducken · Leertaste springen · Tab Punktestand
 - `server/server.js` – HTTP-Server für den Client + WebSocket-Lobby (Räume, PvP-Lebenspunkte, Weiterleitung für Koop).
 - `client/` – Three.js, kein Build-Schritt, keine externen 3D-Dateien: alle Modelle sind prozedural (abgerundete Quader,
   Kapseln, extrudierte Profile) und werden pro Teil zu wenigen Geometrien zusammengebacken.
+  - `menustage.js` – Hauptmenü-Bühne: Hangar, Licht, eigene Menü-Kamera, Charakter-Showcase (immer frontal zur Kamera)
+  - `battlepass.js` – Battle-Pass-Belohnungen, Einlösen, Embleme/Banner und Battle-Pass-Menü
   - `geom.js` – abgerundete Quader, Kapseln, Zusammenbacken, Himmels-Spiegelungen (PBR-Umgebung)
   - `weapon.js` – Waffen (PBR: Polymer, eloxiertes Metall, Stahl, Gummi, Glas), Hände in der Ego-Ansicht
   - `actors.js` – Soldaten mit menschlichen Proportionen, Gegner-KI
