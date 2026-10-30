@@ -64,8 +64,17 @@ G Granate · Shift sprinten · C ducken · Leertaste springen · Tab Punktestand
   (Wallhack, ESP, Aimbot, Speed, Jump, Max-Leben, Godmode, unendlich Munition, kein Rückstoß, Feuerrate; auch im Pause-Menü).
 - **Fortschritt:** wird im Browser (localStorage) gespeichert – jeder Spieler auf seinem eigenen Gerät.
 
+- **Maps:** Stadt mit Stadtmauer und Toren, drumherum ein Umland mit Hügeln, Feldwegen, Wäldern, Felsen und Orten
+  (Bauernhof, Funkhügel, Tankstelle, Tanklager, Depot, Weiler). Berge am Rand bilden die natürliche Grenze, bei Hafen-Maps das Meer.
+
 ## Technik
 
 - `server/server.js` – HTTP-Server für den Client + WebSocket-Lobby (Räume, PvP-Lebenspunkte, Weiterleitung für Koop).
-- `client/` – Three.js, kein Build-Schritt. Die ganze statische Map ist eine einzige InstancedMesh (1 Draw Call),
-  Partikel/Leuchtspuren je ein Draw Call, Sounds werden per WebAudio erzeugt. Grafikstufe „Niedrig“ schaltet Schatten ab.
+- `client/` – Three.js, kein Build-Schritt, keine externen 3D-Dateien: alle Modelle sind prozedural (abgerundete Quader,
+  Kapseln, extrudierte Profile) und werden pro Teil zu wenigen Geometrien zusammengebacken.
+  - `geom.js` – abgerundete Quader, Kapseln, Zusammenbacken, Himmels-Spiegelungen (PBR-Umgebung)
+  - `weapon.js` – Waffen (PBR: Polymer, eloxiertes Metall, Stahl, Gummi, Glas), Hände in der Ego-Ansicht
+  - `actors.js` – Soldaten mit menschlichen Proportionen, Gegner-KI
+  - `vehicles.js` – Autos (Limousine, Kompakt, Pickup, Transporter); alle Autos einer Map = 4 Draw Calls
+  - `terrain.js` / `outskirts.js` – Höhenkarte, Straßennetz, Orte, Vegetation im Umland
+  - Statische Stadt = eine InstancedMesh, Partikel/Leuchtspuren/Hülsen je ein Draw Call. Grafikstufe „Niedrig“ schaltet Schatten ab.

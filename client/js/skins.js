@@ -89,7 +89,8 @@ export function skinMaterial(skin) {
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.magFilter = THREE.LinearFilter;
   tex.anisotropy = 4;
-  const mat = new THREE.MeshPhongMaterial({ map: tex, shininess: 35, specular: 0x333333 });
+  // Lackierte/beschichtete Oberfläche: leicht metallisch, seidenmatt
+  const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6, metalness: 0.12 });
   mat.userData.baseColor = skin.base; // für zusammengeführte Gegner-Modelle
   if (skin.glow) { mat.emissive = new THREE.Color(skin.accent); mat.emissiveMap = tex; mat.emissiveIntensity = skin.glow * 0.8; }
   cache.set(key, mat);

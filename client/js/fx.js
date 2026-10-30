@@ -16,7 +16,12 @@ export class FX {
     const pg = new THREE.BufferGeometry();
     pg.setAttribute('position', new THREE.BufferAttribute(this.pPos, 3));
     pg.setAttribute('color', new THREE.BufferAttribute(this.pCol, 3));
-    this.points = new THREE.Points(pg, new THREE.PointsMaterial({ size: 0.16, vertexColors: true, sizeAttenuation: true, depthWrite: false }));
+    // Runde, weiche Partikel statt Quadrate
+    const dot = document.createElement('canvas'); dot.width = dot.height = 32;
+    const dx = dot.getContext('2d'), grad = dx.createRadialGradient(16, 16, 0, 16, 16, 16);
+    grad.addColorStop(0, 'rgba(255,255,255,1)'); grad.addColorStop(0.5, 'rgba(255,255,255,0.6)'); grad.addColorStop(1, 'rgba(255,255,255,0)');
+    dx.fillStyle = grad; dx.fillRect(0, 0, 32, 32);
+    this.points = new THREE.Points(pg, new THREE.PointsMaterial({ size: 0.12, vertexColors: true, sizeAttenuation: true, depthWrite: false, transparent: true, map: new THREE.CanvasTexture(dot), alphaTest: 0.02 }));
     this.points.frustumCulled = false;
     scene.add(this.points);
     // Leuchtspuren

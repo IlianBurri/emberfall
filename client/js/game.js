@@ -1,6 +1,7 @@
 // Die eigentliche Spielrunde: Story (Singleplayer), Koop (Host simuliert KI) und LAN-PvP.
 import * as THREE from 'three';
 import { World, makeSky, makeSun } from './world.js';
+import { skyEnvironment } from './geom.js';
 import { MAPS, ENEMY_TYPES, WEAPONS } from './data.js';
 import { profile, build, skinDef, addCredits, track, activeCheats } from './profile.js';
 import { weaponStats, buildGunModel } from './weapon.js';
@@ -44,7 +45,7 @@ export class Game {
     const th = this.world.theme;
     this.scene.add(this.world.group);
     this.scene.add(makeSky(th));
-    this.scene.fog = new THREE.Fog(th.fog, 55, 230);
+    this.scene.fog = new THREE.Fog(th.fog, 70, 330);
     this.scene.add(makeSun(th, new THREE.Vector3(30, 60, 20)));
     this.hemi = new THREE.HemisphereLight(th.skyBot, th.street, th.hemiI);
     this.scene.add(this.hemi);
@@ -62,12 +63,24 @@ export class Game {
     this.flashLight = new THREE.PointLight(0xffc070, 0, 8);
     this.scene.add(this.flashLight);
     this.fx = new FX(this.scene);
+    // Spiegelungen aus dem eigenen Himmel: Metall, Glas und Lack reagieren realistisch auf die Umgebung
+    this.envTex = skyEnvironment(app.renderer, th.skyTop, th.skyBot, th.street);
+    this.scene.environment = this.envTex;
+    this.scene.environmentIntensity = th.night ? 0.35 : 0.55;
+    // Patronenhülsen (ein InstancedMesh, wiederverwendet)
+    this.shells = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.0055, 0.0055, 0.024, 8), new THREE.MeshStandardMaterial({ color: 0xc8a04a, roughness: 0.3, metalness: 1 }), 40);
+    this.shellData = Array.from({ length: 40 }, () => ({ p: new THREE.Vector3(0, -99, 0), v: new THREE.Vector3(), r: new THREE.Euler(), w: new THREE.Vector3(), t: 0 }));
+    this.shellNext = 0;
+    this.shells.frustumCulled = false;
+    this.scene.add(this.shells);
 
-    this.camera = new THREE.PerspectiveCamera(profile.settings.fov, innerWidth / innerHeight, 0.05, 500);
+    this.camera = new THREE.PerspectiveCamera(profile.settings.fov, innerWidth / innerHeight, 0.05, 700);
     this.camera.rotation.order = 'YXZ';
     // Ego-Waffe in eigener Szene (kein Clipping in Wände)
     this.vmScene = new THREE.Scene();
-    this.vmScene.add(new THREE.HemisphereLight(0xffffff, 0x666666, 1.6));
+    this.vmScene.add(new THREE.HemisphereLight(0xffffff, 0x666666, 1.0));
+    this.vmScene.environment = this.envTex;
+    this.vmScene.environmentIntensity = 0.45;
     const vmSun = new THREE.DirectionalLight(0xffffff, 1.4); vmSun.position.set(1, 2, 1); this.vmScene.add(vmSun);
     this.vmCam = new THREE.PerspectiveCamera(58, innerWidth / innerHeight, 0.01, 10);
     this.vmRoot = new THREE.Group();
@@ -619,7 +632,11 @@ export class Game {
       const dist = hit.t;
       const fall = dist <= s.range ? 1 : Math.max(s.minDmg, 1 - (dist - s.range) / (s.range * 1.5) * (1 - s.minDmg));
       const dmg = s.dmg * fall * (hit.head ? s.headMult : 1);
-      if (hit.kind === 'world') this.fx.burst(end, 4, '#d8d0c0', 3, 0.35);
+      if (hit.kind === 'world') {
+        const n = this.world.hitNormal;
+        if (n && n.y > 0.6) { this.fx.burst(end, 6, '#8a7a62', 2.5, 0.5, 6); this.fx.burst(end, 2, '#c8c0b0', 0.8, 0.9, -0.4); } // Staub am Boden
+        else { this.fx.burst(end, 4, '#d8d0c0', 3, 0.35); this.fx.burst(end, 2, '#ffd890', 5, 0.12, 9); }                      // Splitter + Funken an Wänden
+      }
       else {
         this.fx.burst(end, 7, hit.kind === 'target' ? '#ffb030' : '#ffd23a', 4, 0.4);
         anyHit = true; if (hit.head) anyHead = true;
@@ -636,6 +653,8 @@ export class Game {
     if (!cheat.noRecoil) w.bloom = Math.min(6, w.bloom + s.recoilV * 0.35 * (s.pellets ? 0.3 : 1));
     w.kick = 1;
     this.flashT = 0.05;
+    this.ejectShell(origin, fwd, right, up, s.cls === 'shotgun');
+    this.fx.burst(muzzleW.clone().addScaledVector(fwd, 0.9), 2, '#8a8a8a', 0.4, 0.6, -0.5); // leichter Mündungsrauch (vor der Kamera, nicht in ihr)
     this.muzzleFlash.visible = true;
     this.muzzleFlash.rotation.z = Math.random() * 3;
     this.muzzleFlash.scale.setScalar((s.silent ? 0.4 : 1) * (0.8 + Math.random() * 0.5));
@@ -645,6 +664,34 @@ export class Game {
     if (this.isHost) this.alertNear(p.pos, p.pos, s.silent ? 9 : 45);
     if (this.isNet) net.send({ t: 'shot', a: muzzleW.toArray().map(r2), b: netShots[0].toArray().map(r2), cls: s.cls, silent: s.silent, hit: true });
     if (w.ammo <= 0 && w.reserve > 0) setTimeout(() => this.reload(), 250);
+  }
+
+  // Hülse fliegt rechts aus dem Auswurffenster und springt über den Boden
+  ejectShell(origin, fwd, right, up, shotgun) {
+    const i = this.shellNext, d = this.shellData[i];
+    this.shellNext = (i + 1) % this.shellData.length;
+    d.p.copy(origin).addScaledVector(fwd, 0.35).addScaledVector(right, 0.12).addScaledVector(up, -0.08);
+    d.v.copy(right).multiplyScalar(2.2 + Math.random()).addScaledVector(up, 1.6 + Math.random()).addScaledVector(fwd, -0.4).add(this.p.vel);
+    d.w.set(Math.random() * 20, Math.random() * 20, Math.random() * 20);
+    d.t = 2.5;
+    this.shells.setColorAt(i, _shellCol.set(shotgun ? 0xb8302a : 0xffffff));
+    this.shells.instanceColor.needsUpdate = true;
+  }
+  updateShells(dt) {
+    this.shellData.forEach((d, i) => {
+      if (d.t > 0) {
+        d.t -= dt;
+        d.v.y -= 9.8 * dt;
+        d.p.addScaledVector(d.v, dt);
+        d.r.x += d.w.x * dt; d.r.y += d.w.y * dt; d.r.z += d.w.z * dt;
+        const floor = this.world.floorAt(d.p.x, d.p.z, d.p.y + 0.05);
+        if (d.p.y < floor + 0.006) { d.p.y = floor + 0.006; d.v.y *= -0.35; d.v.x *= 0.6; d.v.z *= 0.6; d.w.multiplyScalar(0.6); }
+        if (d.t <= 0) d.p.y = -99;
+      }
+      _m4.compose(d.p, _q.setFromEuler(d.r), _one);
+      this.shells.setMatrixAt(i, _m4);
+    });
+    this.shells.instanceMatrix.needsUpdate = true;
   }
 
   currentSpread() {
@@ -901,6 +948,7 @@ export class Game {
       if (this.ended) return;
       this.world.clouds.rotation.y += dt * 0.004;
       this.fx.update(dt);
+      this.updateShells(dt);
       this.updateLasers();
     }
     if (this.isNet) this.netTick(dt);
@@ -1032,8 +1080,9 @@ export class Game {
     this.bob += dt * p.speed * 1.5 * (p.grounded ? 1 : 0);
     const bobA = Math.min(1, p.speed / 6) * (1 - ads * 0.9);
     this.sway.x *= Math.exp(-dt * 8); this.sway.y *= Math.exp(-dt * 8);
-    let x = THREE.MathUtils.lerp(hip[0], adsP[0], ads) + Math.sin(this.bob) * 0.012 * bobA - this.sway.x * 0.02 * (1 - ads);
-    let y = THREE.MathUtils.lerp(hip[1], adsP[1], ads) + Math.abs(Math.cos(this.bob)) * 0.01 * bobA + this.sway.y * 0.015 * (1 - ads);
+    const breath = (1 - Math.min(1, p.speed / 2)) * (1 - ads * 0.7); // ruhiges Atmen im Stand
+    let x = THREE.MathUtils.lerp(hip[0], adsP[0], ads) + Math.sin(this.bob) * 0.012 * bobA - this.sway.x * 0.02 * (1 - ads) + Math.sin(this.time * 0.9) * 0.0015 * breath;
+    let y = Math.sin(this.time * 1.8) * 0.0018 * breath + THREE.MathUtils.lerp(hip[1], adsP[1], ads) + Math.abs(Math.cos(this.bob)) * 0.01 * bobA + this.sway.y * 0.015 * (1 - ads);
     let zz = THREE.MathUtils.lerp(hip[2], adsP[2], ads) + w.kick * 0.045;
     let rx = w.kick * 0.09 * (1 - ads * 0.6), ry = 0, rz = 0;
     if (p.sprint) { ry = 0.6; rx -= 0.25; y -= 0.04; x -= 0.03; }
@@ -1241,11 +1290,13 @@ export class Game {
     this.br?.dispose();
     this.fx.dispose();
     this.world.group.traverse(o => { if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); } });
+    this.envTex?.dispose();
     if (this.sun.shadow.map) this.sun.shadow.map.dispose();
     this.app.onGameEnd(result);
   }
 }
 
+const _one = new THREE.Vector3(1, 1, 1), _m4 = new THREE.Matrix4(), _q = new THREE.Quaternion(), _shellCol = new THREE.Color();
 const xrayMat = new THREE.MeshBasicMaterial({ color: 0xff2a6a, transparent: true, opacity: 0.45, depthTest: false, depthWrite: false });
 const nadeGeo = new THREE.IcosahedronGeometry(0.12, 0);
 const nadeMat = new THREE.MeshLambertMaterial({ color: 0x3f5a2a });

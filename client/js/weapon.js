@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { WEAPONS, ATTACHMENTS, ATTACH_SLOTS } from './data.js';
 import { skinMaterial } from './skins.js';
+import { rbox, capsule, between } from './geom.js';
 
 export function weaponStats(id, build = {}) {
   const s = { ...WEAPONS[id], silent: false, scope: !!WEAPONS[id].scope };
@@ -21,50 +22,64 @@ export function weaponStats(id, build = {}) {
 }
 
 // ---------------------------------------------------------------- Materialien
-const phong = (color, shininess, specular) => new THREE.MeshPhongMaterial({ color, shininess, specular });
+// Physikalisch basierte Materialien: Polymer ist matt, eloxiertes Metall seidig, Stahl blank, Gummi stumpf
+const pbr = (color, roughness, metalness, extra = {}) => new THREE.MeshStandardMaterial({ color, roughness, metalness, ...extra });
 export const GUN_MATS = {
-  dark: phong(0x1c1e22, 30, 0x2a2a2a),
-  metal: phong(0x3a3f46, 70, 0x5a5a5a),
-  steel: phong(0x7d848d, 110, 0x9a9a9a),
-  poly: phong(0x26282b, 12, 0x1a1a1a),
-  rubber: new THREE.MeshLambertMaterial({ color: 0x141414 }),
-  wood: phong(0x6e4022, 25, 0x2a1a10),
-  glass: new THREE.MeshBasicMaterial({ color: 0x66ccff, transparent: true, opacity: 0.3, depthWrite: false }),
-  lens: phong(0x203a5a, 120, 0xffffff),
+  dark: pbr(0x1b1d21, 0.5, 0.6),          // dunkles Waffenmetall (Gunmetal)
+  metal: pbr(0x3a3f46, 0.38, 0.8),        // eloxiertes Aluminium
+  steel: pbr(0x9aa1aa, 0.26, 1.0),        // gebürsteter Stahl (Lauf)
+  poly: pbr(0x24262a, 0.78, 0.0),         // mattes Polymer
+  rubber: pbr(0x141414, 0.95, 0.0),       // gummierter Griff
+  wood: pbr(0x6e4022, 0.6, 0.0),
+  brass: pbr(0xc8a04a, 0.32, 1.0),        // Hülsen
+  glass: new THREE.MeshStandardMaterial({ color: 0x88ccff, transparent: true, opacity: 0.22, roughness: 0.05, metalness: 0.2, depthWrite: false }),
+  lens: pbr(0x1a3050, 0.05, 0.6),
   red: new THREE.MeshBasicMaterial({ color: 0xff2020 }),
   dot: new THREE.MeshBasicMaterial({ color: 0xff1010, toneMapped: false }),
-  lensTint: new THREE.MeshBasicMaterial({ color: 0xffb070, transparent: true, opacity: 0.12, depthWrite: false }),
-  glove: phong(0x2b2a26, 8, 0x111111),
-  sleeve: new THREE.MeshLambertMaterial({ color: 0x4d5a3c }),
-  cuff: new THREE.MeshLambertMaterial({ color: 0x3a4430 }),
+  lensTint: new THREE.MeshStandardMaterial({ color: 0xffb070, transparent: true, opacity: 0.12, roughness: 0.05, depthWrite: false }),
+  glove: pbr(0x2b2a26, 0.85, 0.0),
+  sleeve: pbr(0x4d5a3c, 0.92, 0.0),
+  cuff: pbr(0x3a4430, 0.92, 0.0),
 };
 const M = GUN_MATS;
 const boxGeo = new THREE.BoxGeometry(1, 1, 1);
-const cylGeo = new THREE.CylinderGeometry(1, 1, 1, 10); cylGeo.rotateX(Math.PI / 2);
-const _up = new THREE.Vector3(0, 1, 0);
+const cylHi = new THREE.CylinderGeometry(1, 1, 1, 18); cylHi.rotateX(Math.PI / 2);
+const cylLo = new THREE.CylinderGeometry(1, 1, 1, 8); cylLo.rotateX(Math.PI / 2);
+let LOW = false; // vereinfachte Modelle für Gegner und Loot (weniger Dreiecke)
 
 function box(g, mat, x, y, z, sx, sy, sz, rx = 0) {
-  const m = new THREE.Mesh(boxGeo, mat);
-  m.position.set(x, y, z); m.scale.set(sx, sy, sz); m.rotation.x = rx;
+  let m;
+  if (LOW) { m = new THREE.Mesh(boxGeo, mat); m.scale.set(sx, sy, sz); }
+  else m = new THREE.Mesh(rbox(sx, sy, sz, Math.min(0.012, Math.min(sx, sy, sz) * 0.3), 2), mat); // abgerundete Kanten
+  m.position.set(x, y, z); m.rotation.x = rx;
   g.add(m);
   return m;
 }
 // Zylinder entlang Z, zentriert bei z
 function cyl(g, mat, x, y, z, r, len) {
-  const m = new THREE.Mesh(cylGeo, mat);
+  const m = new THREE.Mesh(LOW ? cylLo : cylHi, mat);
   m.position.set(x, y, z); m.scale.set(r, r, len);
   g.add(m);
   return m;
 }
-// Quader zwischen zwei Punkten (Arme, Streben)
-export function limb(g, mat, a, b, t, t2 = t) {
-  const d = new THREE.Vector3().subVectors(b, a);
-  const m = new THREE.Mesh(boxGeo, mat);
-  m.position.copy(a).addScaledVector(d, 0.5);
-  m.scale.set(t, d.length(), t2);
-  m.quaternion.setFromUnitVectors(_up, d.normalize());
+// Kapsel zwischen zwei Punkten (Arme, Streben)
+export function limb(g, mat, a, b, t) {
+  const { m: mat4, len } = between(a, b);
+  const m = new THREE.Mesh(capsule(t / 2, Math.max(0.001, len - t * 0.5), 3, 10), mat);
+  m.applyMatrix4(mat4);
   g.add(m);
   return m;
+}
+// Kleine Schrauben/Stifte an den Seiten
+function pins(g, x, y, z, n, step) {
+  if (LOW) return;
+  for (let i = 0; i < n; i++) {
+    const m = new THREE.Mesh(cylHi, M.steel);
+    m.rotation.y = Math.PI / 2;
+    m.position.set(x, y, z - i * step); m.scale.set(0.0035, 0.0035, 0.004);
+    g.add(m);
+    const m2 = m.clone(); m2.position.x = -x; g.add(m2);
+  }
 }
 
 const RIFLE = {
@@ -82,6 +97,7 @@ export function buildGunModel(id, build = {}, skin, opts = {}) {
   const def = WEAPONS[id];
   const cls = def.cls;
   const g = new THREE.Group();
+  LOW = !!opts.low;
   const sk = skinMaterial(skin);
   const optic = build.optic && ATTACHMENTS[build.optic]?.classes.includes(cls) ? build.optic : null;
   const mz = build.muzzle && ATTACHMENTS[build.muzzle]?.classes.includes(cls) ? build.muzzle : null;
@@ -155,6 +171,7 @@ export function buildGunModel(id, build = {}, skin, opts = {}) {
   muzzle.position.set(0, my, flashZ);
   g.add(muzzle);
   if (opts.hands) addHands(g, info);
+  LOW = false;
   g.userData = { muzzle, mag: info.magGroup, body: info.body, sightY, info };
   return g;
 }
@@ -167,6 +184,8 @@ function buildRifle(g, cls, sk, build, optic, ext) {
   box(g, sk, 0, H * 0.27, z0 - p.R / 2, W * 0.94, H * 0.46, p.R);                  // Oberes Gehäuse
   box(g, M.dark, W / 2 + 0.001, H * 0.18, z0 - p.R * 0.45, 0.003, H * 0.25, p.R * 0.22); // Auswurffenster
   box(g, M.metal, 0, H / 2 + 0.004, z0 - 0.015, 0.03, 0.01, 0.03);                 // Ladehebel
+  pins(g, W / 2 + 0.001, -H * 0.18, z0 - 0.04, 2, p.R * 0.55);                    // Gehäusestifte
+  box(g, M.dark, 0, H * 0.02, z0 - p.R / 2, W + 0.002, 0.003, p.R * 0.96);          // Trennfuge Ober-/Untergehäuse
   box(g, M.dark, -W / 2 - 0.001, -H * 0.1, z0 - p.R * 0.55, 0.003, 0.012, 0.03);    // Magazinlöser
   const boreY = H * 0.22;
   let hgFront = zF, hgBottom = -H * 0.3;
@@ -286,6 +305,7 @@ function buildPistol(g, id, sk, ext) {
     return { body, pistol: true, railY: 0.04, ironY: 0.05, opticZ: -0.05, muzzleZ: -0.23, boreY: 0.024, br: 0.01, magGroup, gripZ: 0.02, gripY: -0.045 };
   }
   const slide = box(g, sk, 0, 0.022, -0.06, 0.028, 0.034, 0.19);
+  pins(g, 0.0135, -0.004, -0.02, 2, 0.06);
   box(g, M.poly, 0, -0.004, -0.055, 0.026, 0.022, 0.16);                          // Rahmen
   for (let i = 0; i < 4; i++) box(g, M.dark, 0, 0.026, 0.02 - i * 0.008, 0.03, 0.022, 0.003);
   box(g, M.dark, 0.0145, 0.024, -0.075, 0.002, 0.012, 0.035);                     // Auswurf

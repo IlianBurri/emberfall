@@ -1,134 +1,113 @@
-// Detaillierte Low-Poly-Soldaten, Gegner-KI (läuft beim Host/Singleplayer) und "Puppen" für Netzwerk-Figuren.
-// Jedes starre Körperteil wird zu EINER Geometrie mit Vertex-Farben verschmolzen (≈5 Draw Calls pro Soldat).
+// Soldaten mit menschlichen Proportionen (Kapseln, Kugeln, abgerundete Ausrüstung), Gegner-KI (läuft beim
+// Host/Singleplayer) und "Puppen" für Netzwerk-Figuren.
+// Jedes starre Körperteil wird zu EINER Geometrie mit Vertex-Farben verschmolzen (5 Draw Calls pro Soldat).
 import * as THREE from 'three';
 import { ENEMY_TYPES } from './data.js';
-import { buildGunModel, limb } from './weapon.js';
+import { buildGunModel } from './weapon.js';
+import { Baker, capsule } from './geom.js';
 
-const unitBox = new THREE.BoxGeometry(1, 1, 1).toNonIndexed();
-const soldierMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+const soldierMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0.0 });
 function shade(hex, f) { const c = new THREE.Color(hex); c.multiplyScalar(f); return '#' + c.getHexString(); }
-
-// Sammelt Quader und ganze Gruppen und backt sie zu einer BufferGeometry
-class Baker {
-  constructor() { this.pos = []; this.nor = []; this.col = []; this.m = new THREE.Matrix4(); this.c = new THREE.Color(); }
-  add(geo, matrix, color) {
-    const g = geo.index ? geo.toNonIndexed() : geo;
-    const p = g.attributes.position, n = g.attributes.normal;
-    const nm = new THREE.Matrix3().getNormalMatrix(matrix);
-    const v = new THREE.Vector3();
-    this.c.set(color);
-    for (let i = 0; i < p.count; i++) {
-      v.fromBufferAttribute(p, i).applyMatrix4(matrix); this.pos.push(v.x, v.y, v.z);
-      v.fromBufferAttribute(n, i).applyMatrix3(nm).normalize(); this.nor.push(v.x, v.y, v.z);
-      // leichte "Umgebungsverdeckung": Unterseiten etwas dunkler
-      const ao = 0.82 + 0.18 * Math.max(0, v.y);
-      this.col.push(this.c.r * ao, this.c.g * ao, this.c.b * ao);
-    }
-  }
-  box(color, x, y, z, sx, sy, sz, rx = 0, rz = 0) {
-    this.m.compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, 0, rz)), new THREE.Vector3(sx, sy, sz));
-    this.add(unitBox, this.m, color);
-  }
-  group(obj, parentMatrix) {
-    obj.updateMatrixWorld(true);
-    obj.traverse(o => {
-      if (!o.isMesh || o.material.transparent) return;
-      const mat = o.material;
-      const color = mat.userData?.baseColor || '#' + mat.color.getHexString();
-      this.add(o.geometry, new THREE.Matrix4().multiplyMatrices(parentMatrix, o.matrixWorld), color);
-    });
-  }
-  build() {
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
-    g.setAttribute('normal', new THREE.Float32BufferAttribute(this.nor, 3));
-    g.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
-    g.computeBoundingSphere();
-    return g;
-  }
-}
+const SPH = new THREE.SphereGeometry(1, 12, 8);
+const HEMI = new THREE.SphereGeometry(1, 12, 5, 0, Math.PI * 2, 0, Math.PI / 2);
+const CYL = new THREE.CylinderGeometry(1, 1, 1, 8);
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
 const GUN_SKIN = { base: '#30343a', accent: '#202226', pattern: 'solid' };
 const geoCache = new Map();
 function soldierGeometries(o) {
   const key = JSON.stringify(o);
   if (geoCache.has(key)) return geoCache.get(key);
-  const uni = o.color, uniD = shade(o.color, 0.72), vest = o.vest, skin = o.skin, eye = o.eye;
-  const boot = '#2a2420', glove = '#262522', helm = o.helmet, pants = o.pants || uni;
-  // Oberschenkel (Pivot Hüfte)
+  const uni = o.color, vest = o.vest, skin = o.skin, eye = o.eye;
+  const boot = '#2a2420', glove = '#262522', helm = o.helmet, pants = o.pants || shade(uni, 0.85);
+  const hair = '#2a2018';
+  // --- Oberschenkel (Pivot Hüfte): leicht konisch durch zwei Kapseln
   const th = new Baker();
-  th.box(pants, 0, -0.23, 0, 0.2, 0.47, 0.22);
-  th.box(shade(pants, 0.75), 0.1, -0.25, 0, 0.03, 0.12, 0.12); // Beintasche
-  // Unterschenkel + Stiefel (Pivot Knie)
+  th.limb(pants, V(0, -0.03, 0), V(0, -0.24, 0.005), 0.092);
+  th.limb(pants, V(0, -0.22, 0.005), V(0, -0.44, 0.012), 0.078);
+  th.rbox(shade(pants, 0.78), 0.088, -0.25, 0.005, 0.035, 0.12, 0.11, 0, 0, 0, 0.015); // Beintasche
+  // --- Unterschenkel + Stiefel (Pivot Knie)
   const sh = new Baker();
-  sh.box(pants, 0, -0.2, 0, 0.17, 0.4, 0.19);
-  sh.box('#2c2c2a', 0, -0.03, -0.1, 0.17, 0.12, 0.05); // Knieschoner
-  sh.box(boot, 0, -0.4, -0.035, 0.19, 0.12, 0.3);
-  sh.box('#1a1714', 0, -0.455, -0.035, 0.2, 0.02, 0.31);
-  // Oberkörper inkl. Kopf, Armen und Waffe (Pivot Hüfte/Taille)
+  sh.limb(pants, V(0, 0, 0.01), V(0, -0.2, 0.012), 0.072);
+  sh.limb(pants, V(0, -0.2, 0.012), V(0, -0.33, 0.0), 0.06);
+  sh.rbox('#2f2f2c', 0, -0.025, -0.07, 0.13, 0.12, 0.05, 0, 0, 0, 0.022);               // Knieschoner
+  sh.limb(boot, V(0, -0.3, 0), V(0, -0.39, -0.005), 0.07);                              // Stiefelschaft
+  sh.rbox(boot, 0, -0.405, -0.04, 0.12, 0.1, 0.26, 0, 0, 0, 0.04);                       // Stiefel
+  sh.rbox('#16130f', 0, -0.452, -0.04, 0.128, 0.022, 0.27, 0, 0, 0, 0.009);              // Sohle
+  // --- Oberkörper inkl. Kopf, Armen und Waffe (Pivot Taille)
   const tb = new Baker();
-  tb.box(shade(pants, 0.9), 0, 0.0, 0, 0.42, 0.17, 0.26); // Becken
-  tb.box('#2a2622', 0, 0.07, 0, 0.44, 0.05, 0.28);     // Gürtel
-  tb.box('#8a7a50', 0, 0.07, -0.142, 0.06, 0.04, 0.01);
-  tb.box(uni, 0, 0.3, 0, 0.44, 0.42, 0.25);            // Torso
-  tb.box(vest, 0, 0.31, 0, 0.47, 0.34, 0.3);           // Weste
-  for (const x of [-0.13, 0, 0.13]) tb.box(shade(vest, 0.8), x, 0.21, -0.165, 0.11, 0.11, 0.05);
-  tb.box(shade(vest, 0.8), -0.25, 0.25, 0, 0.05, 0.12, 0.12);   // Funkgerät
-  tb.box(uni, 0, 0.48, 0, 0.5, 0.08, 0.27);            // Schultern
-  if (o.pack) { tb.box(shade(vest, 0.9), 0, 0.33, 0.21, 0.32, 0.36, 0.14); tb.box(shade(vest, 0.7), 0, 0.5, 0.22, 0.26, 0.05, 0.12); }
-  tb.box(skin, 0, 0.56, 0, 0.11, 0.08, 0.11);          // Hals
-  tb.box(skin, 0, 0.7, 0, 0.23, 0.26, 0.25);           // Kopf
+  tb.geo(SPH, pants, 0, 0.03, 0, 0.165, 0.11, 0.12);                                      // Becken
+  tb.rbox('#2a2622', 0, 0.085, 0, 0.35, 0.05, 0.25, 0, 0, 0, 0.02);                       // Gürtel
+  tb.rbox('#8a7a50', 0, 0.085, -0.127, 0.05, 0.035, 0.012, 0, 0, 0, 0.005);
+  tb.geo(capsule(0.145, 0.1, 3, 10), uni, 0, 0.19, 0, 1, 1, 0.75);                        // Bauch
+  tb.geo(capsule(0.165, 0.13, 3, 10), uni, 0, 0.35, 0, 1.08, 1, 0.74);                    // Brustkorb
+  for (const s of [-1, 1]) tb.geo(SPH, uni, s * 0.195, 0.47, 0, 0.078, 0.075, 0.08);       // Schultern
+  tb.rbox(vest, 0, 0.31, 0, 0.37, 0.32, 0.285, 0, 0, 0, 0.06);                            // Plattenträger
+  tb.rbox(shade(vest, 0.88), 0, 0.33, -0.148, 0.3, 0.25, 0.025, 0, 0, 0, 0.012);           // Frontplatte
+  for (const s of [-1, 1]) tb.rbox(vest, s * 0.115, 0.47, 0, 0.065, 0.035, 0.27, 0, 0, 0, 0.012); // Schultergurte
+  for (const x of [-0.1, 0, 0.1]) tb.rbox(shade(vest, 0.74), x, 0.2, -0.165, 0.085, 0.1, 0.05, 0, 0, 0, 0.016); // Magazintaschen
+  tb.rbox(shade(vest, 0.7), -0.2, 0.28, 0.04, 0.05, 0.12, 0.06, 0, 0, 0, 0.012);          // Funkgerät
+  tb.geo(CYL, '#1a1a1a', -0.205, 0.42, 0.05, 0.005, 0.12, 0.005);                         // Antenne
+  if (o.pack) {
+    tb.rbox(shade(vest, 0.92), 0, 0.31, 0.205, 0.29, 0.33, 0.13, 0, 0, 0, 0.045);
+    tb.geo(CYL, shade(vest, 0.7), 0, 0.5, 0.2, 0.05, 0.27, 0.05, 0, 0, Math.PI / 2);       // Schlafsackrolle
+  }
+  // Hals und Kopf
+  tb.geo(capsule(0.048, 0.05, 3, 10), skin, 0, 0.565, 0.005);
+  tb.geo(SPH, skin, 0, 0.69, 0, 0.102, 0.122, 0.112);                                     // Schädel
+  tb.geo(SPH, skin, 0, 0.628, -0.018, 0.088, 0.058, 0.09);                                 // Kiefer
+  tb.rbox(skin, 0, 0.678, -0.112, 0.024, 0.042, 0.032, -0.25, 0, 0, 0.011);                // Nase
+  for (const s of [-1, 1]) {
+    tb.geo(SPH, skin, s * 0.102, 0.68, 0.008, 0.016, 0.03, 0.022);                         // Ohren
+    tb.rbox(hair, s * 0.042, 0.732, -0.103, 0.038, 0.009, 0.012, 0, 0, s * -0.12, 0.004); // Augenbrauen
+  }
   const mask = o.mask === true ? 'bala' : o.mask, mc = o.maskColor || '#2a2a2a';
-  if (mask === 'bala') tb.box(mc, 0, 0.64, -0.005, 0.24, 0.12, 0.25);                    // Sturmhaube
-  if (mask === 'bandana') { tb.box(mc, 0, 0.63, -0.01, 0.245, 0.1, 0.255); tb.box(mc, 0, 0.6, 0.13, 0.08, 0.08, 0.04); }
-  tb.box('#1a1a1a', 0, 0.725, -0.125, 0.21, 0.065, 0.02);
-  tb.box(eye, 0, 0.725, -0.136, 0.17, 0.042, 0.01);    // Brille
+  if (mask === 'bala') tb.geo(SPH, mc, 0, 0.638, -0.004, 0.107, 0.078, 0.116);            // Sturmhaube
+  if (mask === 'bandana') { tb.geo(SPH, mc, 0, 0.632, -0.006, 0.108, 0.07, 0.118); tb.geo(SPH, mc, 0, 0.64, 0.115, 0.03, 0.03, 0.02); }
+  tb.rbox('#1c1c1c', 0, 0.71, 0, 0.214, 0.026, 0.222, 0, 0, 0, 0.011);                     // Brillenband
+  tb.rbox('#1a1a1a', 0, 0.71, -0.1, 0.19, 0.046, 0.03, 0, 0, 0, 0.014);                    // Brillenrahmen
+  tb.rbox(eye, 0, 0.71, -0.114, 0.165, 0.034, 0.008, 0, 0, 0, 0.006);                     // Gläser
   const hg = o.headgear || 'helm';
   if (hg === 'helm' || hg === 'nvg') {
-    tb.box(helm, 0, 0.83, 0.01, 0.29, 0.12, 0.31);       // Helm
-    tb.box(helm, 0, 0.9, 0.01, 0.24, 0.04, 0.26);
-    tb.box(shade(helm, 0.8), 0, 0.775, -0.152, 0.29, 0.025, 0.04);
-    tb.box(shade(helm, 0.8), 0.148, 0.76, 0.01, 0.03, 0.1, 0.22);
-    tb.box(shade(helm, 0.8), -0.148, 0.76, 0.01, 0.03, 0.1, 0.22);
-    tb.box('#222222', 0, 0.84, -0.165, 0.06, 0.05, 0.03); // Halterung
-    if (hg === 'nvg') { tb.box('#1a1c1e', 0, 0.8, -0.2, 0.16, 0.06, 0.07); tb.box('#3aff5a', -0.04, 0.8, -0.236, 0.035, 0.035, 0.005); tb.box('#3aff5a', 0.04, 0.8, -0.236, 0.035, 0.035, 0.005); }
+    tb.geo(HEMI, helm, 0, 0.72, 0.005, 0.138, 0.128, 0.15);                                 // Gefechtshelm
+    tb.geo(HEMI, shade(helm, 0.85), 0, 0.715, 0.005, 0.146, 0.022, 0.158);                   // Helmrand
+    for (const s of [-1, 1]) tb.rbox(shade(helm, 0.8), s * 0.13, 0.69, 0.01, 0.025, 0.07, 0.15, 0, 0, s * 0.1, 0.01);
+    tb.rbox('#222222', 0, 0.79, -0.13, 0.055, 0.04, 0.03, 0, 0, 0, 0.01);                   // Halterung
+    if (hg === 'nvg') {
+      tb.rbox('#1a1c1e', 0, 0.765, -0.17, 0.13, 0.05, 0.06, 0, 0, 0, 0.015);
+      for (const s of [-1, 1]) tb.geo(CYL, '#3aff5a', s * 0.03, 0.765, -0.205, 0.016, 0.01, 0.016, Math.PI / 2, 0, 0);
+    }
   } else if (hg === 'cap') {
-    tb.box(helm, 0, 0.84, 0.0, 0.25, 0.08, 0.27);
-    tb.box(shade(helm, 0.85), 0, 0.81, -0.19, 0.22, 0.02, 0.14);
+    tb.geo(HEMI, helm, 0, 0.735, 0.005, 0.118, 0.085, 0.128);
+    tb.rbox(shade(helm, 0.85), 0, 0.742, -0.14, 0.15, 0.012, 0.1, 0.12, 0, 0, 0.006);
   } else if (hg === 'beret') {
-    tb.box(helm, -0.02, 0.84, 0.0, 0.27, 0.06, 0.27, 0, 0.18);
-    tb.box('#ffd23a', 0.08, 0.84, -0.135, 0.04, 0.04, 0.01);
+    tb.geo(SPH, helm, -0.018, 0.79, 0, 0.125, 0.04, 0.125, 0, 0, 0.18);
+    tb.rbox('#ffd23a', 0.06, 0.79, -0.118, 0.03, 0.03, 0.01, 0, 0, 0, 0.005);
   } else if (hg === 'crown') {
-    tb.box('#8a1a1a', 0, 0.84, 0.0, 0.25, 0.06, 0.27);
-    tb.box(helm, 0, 0.88, 0.0, 0.26, 0.05, 0.28);
-    for (const [x, z] of [[-0.1, -0.11], [0.1, -0.11], [0, -0.13], [-0.1, 0.11], [0.1, 0.11]]) tb.box(helm, x, 0.95, z, 0.05, 0.09, 0.03);
-    tb.box('#ff2a4a', 0, 0.9, -0.142, 0.04, 0.03, 0.01);
+    tb.geo(CYL, '#8a1a1a', 0, 0.79, 0, 0.115, 0.05, 0.118);
+    tb.geo(CYL, helm, 0, 0.825, 0, 0.12, 0.045, 0.123);
+    for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2; tb.rbox(helm, Math.sin(a) * 0.11, 0.875, Math.cos(a) * 0.115, 0.04, 0.07, 0.02, 0, a, 0, 0.008); }
+    tb.geo(SPH, '#ff2a4a', 0, 0.825, -0.125, 0.018, 0.018, 0.01);
   } else { // Frisur
-    tb.box(helm, 0, 0.845, 0.01, 0.245, 0.05, 0.265);
-    tb.box(helm, 0, 0.76, 0.12, 0.245, 0.14, 0.04);
-    tb.box(helm, 0.118, 0.79, 0.04, 0.02, 0.08, 0.15); tb.box(helm, -0.118, 0.79, 0.04, 0.02, 0.08, 0.15);
+    tb.geo(HEMI, helm, 0, 0.705, 0.008, 0.11, 0.1, 0.122);
+    tb.geo(SPH, helm, 0, 0.69, 0.06, 0.1, 0.09, 0.07);
   }
   if (o.boss) {
-    tb.box('#ffcc33', 0, 0.94, 0.01, 0.06, 0.08, 0.2); tb.box('#ffcc33', 0, 0.82, -0.17, 0.12, 0.04, 0.01);
-    tb.box('#ffcc33', 0.2, 0.47, -0.05, 0.08, 0.03, 0.12); tb.box('#ffcc33', -0.2, 0.47, -0.05, 0.08, 0.03, 0.12);
+    tb.rbox('#ffcc33', 0, 0.83, 0, 0.04, 0.035, 0.26, 0, 0, 0, 0.012);
+    for (const s of [-1, 1]) tb.rbox('#ffcc33', s * 0.2, 0.495, -0.01, 0.1, 0.03, 0.13, 0, 0, s * 0.25, 0.012);
   }
-  // Waffe
-  const gun = buildGunModel(o.gun, {}, GUN_SKIN);
+  // Waffe (vereinfachte Variante) und Arme, die sie halten
+  const gun = buildGunModel(o.gun, {}, GUN_SKIN, { low: true });
   const info = gun.userData.info;
-  const gunPos = new THREE.Vector3(0.09, 0.36, -0.22);
+  const gunPos = V(0.09, 0.36, -0.22);
   tb.group(gun, new THREE.Matrix4().makeTranslation(gunPos.x, gunPos.y, gunPos.z));
-  // Arme als Quader zwischen Schulter, Ellbogen und Hand
-  const tmpG = new THREE.Group();
-  const V = (x, y, z) => new THREE.Vector3(x, y, z);
-  const handR = V(gunPos.x + 0.01, gunPos.y + info.gripY, gunPos.z + info.gripZ);
-  const handL = info.pistol ? V(gunPos.x - 0.04, gunPos.y + info.gripY, gunPos.z + info.gripZ) : V(gunPos.x, gunPos.y + info.supportY - 0.02, gunPos.z + info.supportZ);
-  const shR = V(0.25, 0.44, 0.0), shL = V(-0.25, 0.44, 0.0);
-  const elR = V(0.27, 0.2, -0.08), elL = info.pistol ? V(-0.2, 0.22, -0.15) : V(-0.17, 0.24, -0.2);
-  const mU = new THREE.MeshBasicMaterial({ color: uni }), mF = new THREE.MeshBasicMaterial({ color: shade(uni, 0.9) }), mG = new THREE.MeshBasicMaterial({ color: glove });
-  limb(tmpG, mU, shR, elR, 0.12); limb(tmpG, mF, elR, handR, 0.1);
-  limb(tmpG, mU, shL, elL, 0.12); limb(tmpG, mF, elL, handL, 0.1);
-  for (const h of [handR, handL]) { const m = new THREE.Mesh(unitBox, mG); m.position.copy(h); m.scale.set(0.08, 0.09, 0.09); tmpG.add(m); }
-  tb.group(tmpG, new THREE.Matrix4());
+  const handR = V(gunPos.x + 0.012, gunPos.y + info.gripY, gunPos.z + info.gripZ);
+  const handL = info.pistol ? V(gunPos.x - 0.04, gunPos.y + info.gripY, gunPos.z + info.gripZ) : V(gunPos.x - 0.005, gunPos.y + info.supportY - 0.02, gunPos.z + info.supportZ);
+  const shR = V(0.2, 0.455, 0.0), shL = V(-0.2, 0.455, 0.0);
+  const elR = V(0.23, 0.24, -0.07), elL = info.pistol ? V(-0.18, 0.25, -0.13) : V(-0.15, 0.27, -0.18);
+  tb.limb(uni, shR, elR, 0.056); tb.limb(shade(uni, 0.93), elR, handR, 0.047);
+  tb.limb(uni, shL, elL, 0.056); tb.limb(shade(uni, 0.93), elL, handL, 0.047);
+  for (const h of [handR, handL]) tb.rbox(glove, h.x, h.y, h.z, 0.06, 0.075, 0.085, 0, 0, 0, 0.025);
   const res = { thigh: th.build(), shin: sh.build(), torso: tb.build() };
   geoCache.set(key, res);
   return res;
@@ -140,7 +119,7 @@ export function bakedGunGeometry(id, build = {}) {
   const key = 'gun:' + id + JSON.stringify(build);
   if (!geoCache.has(key)) {
     const b = new Baker();
-    b.group(buildGunModel(id, build, GUN_SKIN), new THREE.Matrix4());
+    b.group(buildGunModel(id, build, GUN_SKIN, { low: true }), new THREE.Matrix4());
     geoCache.set(key, b.build());
   }
   return geoCache.get(key);

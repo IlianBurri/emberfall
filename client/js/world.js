@@ -1,6 +1,11 @@
 // Prozedurale Low-Poly-Maps. Alles Statische ist EINE InstancedMesh aus Würfeln (1 Draw Call),
 // Baumkronen sind zwei weitere InstancedMeshes. Kollision = achsenparallele Boxen in einem Raster.
 import * as THREE from 'three';
+import { Baker } from './geom.js';
+import { carParts, carMaterials, CAR_VARIANTS, CAR_SIZE } from './vehicles.js';
+import { Terrain, OUT, RING } from './terrain.js';
+import { outskirtsMixin } from './outskirts.js';
+export { OUT };
 
 export function mulberry(seed) {
   let s = seed >>> 0;
@@ -55,6 +60,15 @@ export class World {
     this.crowns = [];   // [x, y, z, sx, sy, sz, color]
     this.cones = [];
     this.cyls = [];     // [x, y0, z, r, h, r, color]
+    this.cars = [];     // geparkte Autos {x, z, horiz, variant, color}
+    this.rocks = [];    // Felsen mit Drehung [x, y, z, sx, sy, sz, color, rx, ry, rz]
+    this.extra = new Baker(); // Sonderformen (Satteldächer, Kuppeln, liegende Zylinder)
+    this.outerSpots = []; // Loot-/Spawnpunkte im Umland
+    this.yOff = 0;
+    this.half = HALF;
+    this.themeKey = mapDef.theme;
+    this.water = mapDef.theme === 'hafen' || mapDef.theme === 'nacht';
+    this.terrain = new Terrain(mapDef.seed, HALF, mapDef.theme, this.water);
     this.wires = [];    // Linienpaare (Stromleitungen)
     this.pois = [];
     this.sniperSpots = [];
@@ -69,15 +83,25 @@ export class World {
 
   // ------------------------------------------------------------ Bausteine
   box(cx, y0, cz, sx, sy, sz, color, collide = true, rx = 0, ry = 0) {
+    y0 += this.yOff;
     this.vis.push([cx, y0, cz, sx, sy, sz, color, rx, ry]);
     if (collide) this.boxes.push({ x0: cx - sx / 2, y0, z0: cz - sz / 2, x1: cx + sx / 2, y1: y0 + sy, z1: cz + sz / 2 });
   }
   // Zylinder (Fässer, Masten, Tanks). Kollision als Box, wenn gewünscht.
   cyl(x, y0, z, r, h, color, collide = false) {
+    y0 += this.yOff;
     this.cyls.push([x, y0, z, r, h, r, color]);
     if (collide) this.boxes.push({ x0: x - r * 0.85, y0, z0: z - r * 0.85, x1: x + r * 0.85, y1: y0 + h, z1: z + r * 0.85 });
   }
   wire(a, b) { this.wires.push(a.x, a.y, a.z, b.x, b.y, b.z); }
+
+  // Nur Kollision, ohne sichtbaren Würfel (Optik kommt aus einem detaillierten Modell)
+  collider(cx, y0, cz, sx, sy, sz) { this.boxes.push({ x0: cx - sx / 2, y0, z0: cz - sz / 2, x1: cx + sx / 2, y1: y0 + sy, z1: cz + sz / 2 }); }
+  car(x, z, horiz, variant, color, flip = false, y = this.yOff) {
+    const c = CAR_SIZE[variant];
+    this.collider(x, y + 0.2, z, horiz ? c.L : c.W, c.H - 0.3, horiz ? c.W : c.L);
+    this.cars.push({ x, z, y, ry: (horiz ? 0 : -Math.PI / 2) + (flip ? Math.PI : 0), variant, color });
+  }
 
   // ------------------------------------------------------------ Details
   barrel(x, z, y = 0) {
@@ -189,21 +213,26 @@ export class World {
 
   crate(x, z, y = 0, s = 1) { this.box(x, y, z, s, s, s, this.rng() < 0.5 ? '#b0814a' : '#9a6c3a'); }
 
-  tree(x, z) {
+  tree(x, z, y = this.yOff) {
     const t = this.theme;
+    const oy = this.yOff; this.yOff = y;
+    this.treeAt(x, z, t, y);
+    this.yOff = oy;
+  }
+  treeAt(x, z, t, y) {
     if (t.crown === 'pine') {
       this.box(x, 0, z, 0.4, 1.4, 0.4, t.trunk);
       const h = this.range(4, 6.5);
-      this.cones.push([x, 1.2, z, 1.6, h, 1.6, t.tree]);
-      this.cones.push([x, 1.2 + h * 0.55, z, 1.25, h * 0.5, 1.25, '#e8f0f4']); // Schneehaube
+      this.cones.push([x, y + 1.2, z, 1.6, h, 1.6, t.tree]);
+      this.cones.push([x, y + 1.2 + h * 0.55, z, 1.25, h * 0.5, 1.25, '#e8f0f4']); // Schneehaube
     } else if (t.crown === 'palm') {
       const h = this.range(4, 6);
       this.box(x, 0, z, 0.35, h, 0.35, t.trunk);
-      this.crowns.push([x, h, z, 2.4, 0.5, 2.4, t.tree]);
+      this.crowns.push([x, y + h, z, 2.4, 0.5, 2.4, t.tree]);
     } else {
       this.box(x, 0, z, 0.45, 2.2, 0.45, t.trunk);
       const s = this.range(1.5, 2.3);
-      this.crowns.push([x, 2.2 + s * 0.6, z, s, s * 0.9, s, t.tree]);
+      this.crowns.push([x, y + 2.2 + s * 0.6, z, s, s * 0.9, s, t.tree]);
     }
   }
 
@@ -225,7 +254,7 @@ export class World {
     // Dach
     for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) this.box(cx + dx * (W / 2 - 0.2), H + 1, cz + dz * (W / 2 - 0.2), 0.2, 1.6, 0.2, leg, false);
     this.box(cx, H + 2.6, cz, W + 0.6, 0.3, W + 0.6, this.pick(this.theme.roof), false);
-    this.sniperSpots.push(new THREE.Vector3(cx, H, cz));
+    this.sniperSpots.push(new THREE.Vector3(cx, H + this.yOff, cz));
   }
 
   // ------------------------------------------------------------ Generierung
@@ -238,18 +267,25 @@ export class World {
     // (Asphalt-Boden wird als texturierte Fläche in buildMeshes erzeugt)
     this.blockCenters = [];
     // Begrenzung
-    const wallC = t.night ? '#2c3038' : '#9a8f80';
-    this.box(0, 0, -HALF - 0.5, HALF * 2 + 2, 6, 1, wallC);
-    this.box(0, 0, HALF + 0.5, HALF * 2 + 2, 6, 1, wallC);
-    this.box(-HALF - 0.5, 0, 0, 1, 6, HALF * 2 + 2, wallC);
-    this.box(HALF + 0.5, 0, 0, 1, 6, HALF * 2 + 2, wallC);
-    // Hintergrund-Silhouetten hinter der Mauer
-    for (let k = 0; k < 40; k++) {
-      const side = k % 4, off = this.range(-HALF, HALF), dist = HALF + this.range(8, 30);
-      const x = side === 0 ? off : side === 1 ? off : side === 2 ? -dist : dist;
-      const z = side === 0 ? -dist : side === 1 ? dist : off;
-      const s = this.range(6, 14);
-      this.box(x, 0, z, s, this.range(8, 26), s, this.pick(t.buildings), false);
+    // Stadtmauer mit Toren zum Umland
+    const wallC = t.night ? '#3a3e46' : '#a89c88';
+    const gates = this.terrain.gates;
+    for (const side of ['n', 's', 'e', 'w']) {
+      const along = side === 'n' || side === 's';
+      const fixed = (side === 'n' || side === 'e' ? 1 : -1) * (HALF + 0.6);
+      const gap = gates[side];
+      const segs = gap === null ? [[-HALF - 1.2, HALF + 1.2]] : [[-HALF - 1.2, gap - 5], [gap + 5, HALF + 1.2]];
+      for (const [a, b] of segs) {
+        const len = b - a, mid = (a + b) / 2, [x, z] = along ? [mid, fixed] : [fixed, mid];
+        this.box(x, 0, z, along ? len : 1.2, 3.4, along ? 1.2 : len, wallC);
+        this.box(x, 3.4, z, along ? len : 1.5, 0.3, along ? 1.5 : len, shadeHex(wallC, 0.85), false);
+        for (let k = a + 1.5; k < b - 1; k += 3) { const [cx, cz] = along ? [k, fixed] : [fixed, k]; this.box(cx, 3.7, cz, along ? 1.2 : 1.5, 0.5, along ? 1.5 : 1.2, shadeHex(wallC, 0.85), false); } // Zinnen
+      }
+      if (gap !== null) for (const o of [-5.7, 5.7]) {
+        const [x, z] = along ? [gap + o, fixed] : [fixed, gap + o];
+        this.box(x, 0, z, 2, 5, 2, shadeHex(wallC, 0.92));
+        this.box(x, 5, z, 2.4, 0.45, 2.4, shadeHex(wallC, 0.75), false);
+      }
     }
     // Straßenmarkierungen
     for (let i = 0; i < N; i++) for (let j = 0; j <= N; j++) {
@@ -333,14 +369,14 @@ export class World {
       if (t.crown === 'pine' && this.rng() < 0.6) this.crowns.push([cx + this.range(-5, 5), 0.1, cz + 6.3, 1.6, 0.45, 0.8, '#f4f8fb']); // Schneehaufen
     }
     this.landmarks();
+    this.outskirts();
   }
 
   // Große Kulissen hinter der Mauer, je nach Thema
   landmarks() {
     const t = this.theme, R = HALF + 4;
     if (t === THEMES.hafen || t === THEMES.nacht) {
-      this.water = true;
-      this.box(0, 0, HALF + 11.5, HALF * 2 + 60, 0.4, 1.0, '#8a8a86', false); // Kaimauer
+      this.box(0, -3, HALF + 5.5, OUT * 2 + 60, 3.3, 1.0, '#8a8a86', false); // Kaimauer
       for (const x of [-30, 25]) { // Hafenkräne
         const z = R + 4, c = '#e0a020';
         for (const dx of [-3, 3]) for (const dz of [-3, 3]) this.box(x + dx, 0, z + dz, 0.6, 22, 0.6, c, false);
@@ -357,20 +393,13 @@ export class World {
         for (let s = 0; s < 4; s++) this.box(x - 14 + s * 6, 5, R + 40, 5, 2.6, 10, this.pick(t.containers), false);
       }
     } else if (t === THEMES.industrie) {
-      for (let k = 0; k < 6; k++) {
-        const x = -55 + k * 22, z = -R - 12 - (k % 2) * 8;
-        this.cyl(x, 0, z, 5, 11 + (k % 3) * 3, k % 2 ? '#c8c4bc' : '#9a8f80');
-        this.cyl(x, 11 + (k % 3) * 3, z, 5.2, 0.6, '#5a5550');
-      }
       for (let k = 0; k < 4; k++) this.box(0, 6 + k * 1.2, -R - 4, HALF * 2, 0.5, 0.5, '#7a6a5a', false); // Rohrbrücke
+      for (const x of [-R - 2, R + 2]) this.cyl(x, 0, -R - 4, 0.5, 11, '#6a6a6a', true);
     } else if (t === THEMES.wueste) {
-      for (let k = 0; k < 30; k++) {
-        const a = this.rng() * Math.PI * 2, r = R + 20 + this.rng() * 60;
-        this.crowns.push([Math.cos(a) * r, -2, Math.sin(a) * r, 18 + this.rng() * 20, 6 + this.rng() * 8, 14 + this.rng() * 14, '#e3c48a']);
-      }
+      // Dünen entstehen jetzt aus dem Gelände
     } else if (t === THEMES.schnee) {
       for (let k = 0; k < 16; k++) {
-        const a = k / 16 * Math.PI * 2 + this.rng() * 0.3, r = R + 70 + this.rng() * 40, h = 40 + this.rng() * 50;
+        const a = k / 16 * Math.PI * 2 + this.rng() * 0.3, r = OUT + 60 + this.rng() * 40, h = 60 + this.rng() * 50;
         this.cones.push([Math.cos(a) * r, -1, Math.sin(a) * r, 35 + this.rng() * 20, h, 35, '#8a9aaa']);
         this.cones.push([Math.cos(a) * r, h * 0.55 - 1, Math.sin(a) * r, 16, h * 0.45, 16, '#f4f8fb']);
       }
@@ -381,11 +410,9 @@ export class World {
     const r = this.rng();
     const sx = horiz ? 1 : 0, sz = horiz ? 0 : 1;
     if (r < 0.35) { // Auto
-      const col = this.pick(['#d6452f', '#2f6fd6', '#f0c020', '#e8e8e8', '#2fa35a', '#ff8ab8']);
-      const L = 4, W = 1.8;
-      this.box(x, 0.25, z, horiz ? L : W, 0.9, horiz ? W : L, col);
-      this.box(x - sx * 0.3, 1.15, z - sz * 0.3, horiz ? 2 : 1.6, 0.7, horiz ? 1.6 : 2, '#9fd0ff');
-      for (const d of [-1.3, 1.3]) for (const e of [-0.85, 0.85]) this.box(x + sx * d + sz * e, 0, z + sz * d + sx * e, 0.6, 0.6, 0.6, '#1e1e1e', false);
+      const variant = this.pick(['limousine', 'limousine', 'kompakt', 'kompakt', 'pickup', 'transporter']);
+      const color = this.pick(['#9a1c20', '#1f3c78', '#d6d6d2', '#1b1c1f', '#5f6368', '#b88a28', '#2b5a36', '#ececec', '#6a1414', '#3a6a8a']);
+      this.car(x, z, horiz, variant, color, this.rng() < 0.5);
     } else if (r < 0.6) { // Barriere
       this.box(x, 0, z, horiz ? 3 : 0.7, 1.05, horiz ? 0.7 : 3, '#d8d4c8');
       this.box(x, 0.6, z, horiz ? 3.02 : 0.72, 0.18, horiz ? 0.72 : 3.02, '#e04a2f', false);
@@ -523,7 +550,8 @@ export class World {
   buildMeshes() {
     const t = this.theme;
     // Asphalt
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2 + 60, HALF * 2 + 60), new THREE.MeshLambertMaterial({ map: groundTexture(t.street, 'asphalt', 28) }));
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(HALF * 2 + 7, HALF * 2 + 7), new THREE.MeshStandardMaterial({ map: groundTexture(t.street, 'asphalt', 14), roughness: 0.92 }));
+    this.group.add(this.terrainMesh());
     ground.rotation.x = -Math.PI / 2;
     ground.receiveShadow = true;
     this.group.add(ground);
@@ -552,7 +580,7 @@ export class World {
     const ao = [];
     for (let i = 0; i < unit.attributes.position.count; i++) { const y = unit.attributes.position.getY(i); ao.push(...Array(3).fill(0.68 + 0.32 * y)); }
     unit.setAttribute('color', new THREE.Float32BufferAttribute(ao, 3));
-    const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors: true });
+    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.88, metalness: 0.0 });
     const mesh = new THREE.InstancedMesh(unit, mat, this.vis.length);
     const m = new THREE.Matrix4(), c = new THREE.Color();
     const q = new THREE.Quaternion(), qr = new THREE.Quaternion(), eul = new THREE.Euler();
@@ -570,7 +598,7 @@ export class World {
 
     const addInst = (geo, list) => {
       if (!list.length) return;
-      const im = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true }), list.length);
+      const im = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 0.9 }), list.length);
       list.forEach((v, i) => {
         m.compose(new THREE.Vector3(v[0], v[1], v[2]), q, new THREE.Vector3(v[3], v[4], v[5]));
         im.setMatrixAt(i, m);
@@ -584,6 +612,31 @@ export class World {
     addInst(cone, this.cones);
     const cylG = new THREE.CylinderGeometry(1, 1, 1, 12); cylG.translate(0, 0.5, 0);
     addInst(cylG, this.cyls);
+    if (this.rocks.length) {
+      const im = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0), new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.95 }), this.rocks.length);
+      this.rocks.forEach((v, i) => { m.compose(new THREE.Vector3(v[0], v[1], v[2]), new THREE.Quaternion().setFromEuler(new THREE.Euler(v[7], v[8], v[9])), new THREE.Vector3(v[3], v[4], v[5])); im.setMatrixAt(i, m); im.setColorAt(i, c.set(v[6])); });
+      im.castShadow = true; im.receiveShadow = true;
+      this.group.add(im);
+    }
+    if (!this.extra.empty) {
+      const em = new THREE.Mesh(this.extra.build(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }));
+      em.castShadow = true; em.receiveShadow = true;
+      this.group.add(em);
+    }
+    if (this.cars.length) {
+      const bakers = { paint: new Baker(false), matte: new Baker(false), light: new Baker(false), glass: new Baker(false) };
+      for (const car of this.cars) {
+        const cm = new THREE.Matrix4().compose(new THREE.Vector3(car.x, car.y, car.z), new THREE.Quaternion().setFromEuler(new THREE.Euler(0, car.ry, 0)), new THREE.Vector3(1, 1, 1));
+        for (const p of carParts(car.variant, car.color)) bakers[p.mat].add(p.geo, new THREE.Matrix4().multiplyMatrices(cm, p.m), p.color);
+      }
+      const mats = carMaterials();
+      for (const [k, b] of Object.entries(bakers)) {
+        if (b.empty) continue;
+        const mesh = new THREE.Mesh(b.build(), mats[k]);
+        mesh.castShadow = k !== 'glass'; mesh.receiveShadow = true;
+        this.group.add(mesh);
+      }
+    }
     // Stromleitungen (ein Draw Call)
     if (this.wires.length) {
       const lg = new THREE.BufferGeometry();
@@ -594,7 +647,7 @@ export class World {
     if (this.water) {
       const w = new THREE.Mesh(new THREE.PlaneGeometry(500, 200), new THREE.MeshPhongMaterial({ color: t.night ? 0x0a1830 : 0x2a6a9a, shininess: 90, specular: 0x88aacc, transparent: true, opacity: 0.92 }));
       w.rotation.x = -Math.PI / 2;
-      w.position.set(0, 0.03, HALF + 112);
+      w.position.set(0, -0.35, HALF + 106);
       this.group.add(w);
     }
     // Wolken (eigene Gruppe, dreht sich langsam)
@@ -633,13 +686,17 @@ export class World {
   move(p, v, dt, r, h, grounded, gravity = 24) {
     // Stufen dürfen auch im leichten Fallen genommen werden (z. B. Treppe runter, Kante hoch)
     const canStep = grounded || v.y <= 0;
+    const sx0 = p.x, sz0 = p.z, sy0 = p.y;
     p.x += v.x * dt; this.resolve(p, r, h, 0, canStep);
     p.z += v.z * dt; this.resolve(p, r, h, 2, canStep);
+    // Gelände: steiler als ~48° geht nicht hoch (Berge sind eine natürliche Grenze)
+    const th = this.terrainH(p.x, p.z), moved = Math.hypot(p.x - sx0, p.z - sz0);
+    if (th > sy0 + 0.05 && moved > 1e-4 && (th - Math.max(sy0, this.terrainH(sx0, sz0))) / moved > 1.1) { p.x = sx0; p.z = sz0; }
     // Höhe NACH dem Hochsteigen merken, sonst "fällt" man in die Stufe und wird zurückgeschoben
     const prevY = p.y;
     v.y -= gravity * dt;
     p.y += v.y * dt;
-    let g = false, floor = 0;
+    let g = false, floor = this.terrainH(p.x, p.z);
     for (const b of this.query(p.x - r, p.z - r, p.x + r, p.z + r)) {
       if (p.x + r <= b.x0 || p.x - r >= b.x1 || p.z + r <= b.z0 || p.z - r >= b.z1) continue;
       if (b.y1 <= prevY + 0.02) floor = Math.max(floor, b.y1);
@@ -647,9 +704,9 @@ export class World {
     }
     if (p.y <= floor) { p.y = floor; v.y = 0; g = true; }
     else if (grounded && v.y <= 0 && prevY - floor < 0.55) { p.y = floor; v.y = 0; g = true; } // sanft Stufe runter
-    const lim = HALF - r - 0.05;
+    const lim = OUT - 2 - r;
     p.x = Math.max(-lim, Math.min(lim, p.x));
-    p.z = Math.max(-lim, Math.min(lim, p.z));
+    p.z = Math.max(-lim, Math.min(this.water ? HALF + 4.5 : lim, p.z));
     return g;
   }
 
@@ -662,6 +719,14 @@ export class World {
       if (axis === 0) { const a = p.x + r - b.x0, c = b.x1 - (p.x - r); if (a < c) p.x -= a; else p.x += c; }
       else { const a = p.z + r - b.z0, c = b.z1 - (p.z - r); if (a < c) p.z -= a; else p.z += c; }
     }
+  }
+
+  terrainH(x, z) { return this.terrain.height(x, z); }
+
+  floorAt(x, z, maxY = 999) {
+    let f = this.terrainH ? this.terrainH(x, z) : 0;
+    for (const b of this.query(x, z, x, z)) if (x > b.x0 && x < b.x1 && z > b.z0 && z < b.z1 && b.y1 <= maxY && b.y1 > f) f = b.y1;
+    return f;
   }
 
   // Ist über der Stufe genug Platz für den Körper?
@@ -694,6 +759,20 @@ export class World {
       if (tmin < 0) continue; // Start in der Box
       best = tmin;
       n.set(ax === 0 ? -Math.sign(d.x) : 0, ax === 1 ? -Math.sign(d.y) : 0, ax === 2 ? -Math.sign(d.z) : 0);
+    }
+    const lim = HALF + 2;
+    for (let t = 0.3; t < best; t += 1.2) {
+      const x = o.x + d.x * t, z = o.z + d.z * t;
+      if (Math.abs(x) < lim && Math.abs(z) < lim) continue;
+      if (o.y + d.y * t >= this.terrainH(x, z)) continue;
+      let a = Math.max(0, t - 1.2), b = t;
+      for (let i = 0; i < 6; i++) { const m = (a + b) / 2; if (o.y + d.y * m < this.terrainH(o.x + d.x * m, o.z + d.z * m)) b = m; else a = m; }
+      if (b < best) {
+        best = b;
+        const hx = o.x + d.x * b, hz = o.z + d.z * b;
+        n.set(this.terrainH(hx - 0.5, hz) - this.terrainH(hx + 0.5, hz), 1, this.terrainH(hx, hz - 0.5) - this.terrainH(hx, hz + 0.5)).normalize();
+      }
+      break;
     }
     return best;
   }
@@ -826,3 +905,5 @@ export function makeSky(theme) {
   mesh.renderOrder = -1;
   return mesh;
 }
+
+Object.assign(World.prototype, outskirtsMixin);

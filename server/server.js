@@ -22,6 +22,7 @@ const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon',
 };
+const ADDONS = path.join(ROOT, 'node_modules/three/examples/jsm');
 const STATIC = {
   '/vendor/three.module.js': path.join(ROOT, 'node_modules/three/build/three.module.js'),
   '/vendor/three.core.js': path.join(ROOT, 'node_modules/three/build/three.core.js'),
@@ -33,7 +34,10 @@ const server = http.createServer((req, res) => {
   if (url === '/health') { res.writeHead(200); return res.end('ok'); }
   if (url === '/') url = '/index.html';
   let file = STATIC[url] || path.join(CLIENT, url);
-  if (!file.startsWith(CLIENT) && !STATIC[url]) { res.writeHead(403); return res.end(); }
+  let allowed = file.startsWith(CLIENT) || !!STATIC[url];
+  // three.js-Erweiterungen (abgerundete Geometrien usw.) direkt aus dem Paket
+  if (url.startsWith('/vendor/addons/')) { file = path.join(ADDONS, url.slice('/vendor/addons/'.length)); allowed = file.startsWith(ADDONS); }
+  if (!allowed) { res.writeHead(403); return res.end(); }
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(404); return res.end('Nicht gefunden'); }
     res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
@@ -99,7 +103,7 @@ function startMatch(r) {
   for (const p of r.players.values()) { p.kills = 0; p.deaths = 0; p.hp = p.maxHp || 100; p.armor = 0; p.alive = true; p.lastHit = 0; p.place = 0; p.pos = null; }
   if (r.mode === 'pvp') r.endAt = Date.now() + PVP_TIME;
   if (r.mode === 'br') {
-    r.zone = makeZone(r.seed, Date.now());
+    r.zone = makeZone(r.seed, Date.now(), { maxZ: ['hafen', 'nacht'].includes(r.map) ? 40 : 100 });
     r.taken = new Set();
     r.brSize = r.players.size;
   }

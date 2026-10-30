@@ -24,6 +24,7 @@ export function generateLoot(world, seed) {
   for (const it of world.intersections) if (r() < 0.5) spots.push(new THREE.Vector3(it.x + (r() - 0.5) * 3, 0, it.z + (r() - 0.5) * 3));
   for (const p of world.pois) for (let k = 0; k < 3; k++) spots.push(new THREE.Vector3(p.x + (r() - 0.5) * 5, 0.15, p.z + (r() - 0.5) * 5));
   for (const s of world.sniperSpots) spots.push(s.clone());
+  for (const s of world.outerSpots || []) if (r() < 0.75) spots.push(s.clone()); // Umland
   for (const [cx, cz] of world.blockCenters) if (r() < 0.45) spots.push(new THREE.Vector3(cx + (r() < 0.5 ? -7.6 : 7.6), 0, cz + (r() - 0.5) * 6));
   return spots.map((pos, i) => {
     const kind = weighted(r, KIND_WEIGHTS);

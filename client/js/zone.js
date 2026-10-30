@@ -6,18 +6,19 @@ export function mulberry(seed) {
 }
 
 // [Wartezeit s, Schrumpfdauer s, neuer Radius, Schaden/s außerhalb]
-const PHASES = [[45, 30, 70, 2], [35, 25, 46, 4], [30, 22, 26, 7], [25, 20, 12, 11], [20, 18, 0, 18]];
+const PHASES = [[50, 35, 105, 2], [40, 30, 68, 4], [32, 25, 38, 7], [26, 20, 16, 11], [20, 18, 0, 18]];
 export const DROP_TIME = 6; // Sekunden Fallschirmsprung vor der ersten Phase
 
-export function makeZone(seed, startMs) {
+export function makeZone(seed, startMs, opts = {}) {
+  const maxZ = opts.maxZ ?? 100; // bei Hafen-Maps ist der Norden Meer
   const rnd = mulberry(seed ^ 0xb0b);
   const phases = [];
-  let cx = 0, cz = 0, r = 100, t = DROP_TIME;
+  let cx = 0, cz = 0, r = 175, t = DROP_TIME;
   for (const [wait, shrink, nr, dps] of PHASES) {
-    const a = rnd() * Math.PI * 2, d = rnd() * Math.max(0, Math.min(r - nr, 40)) * 0.8;
+    const a = rnd() * Math.PI * 2, d = rnd() * Math.max(0, Math.min(r - nr, 55)) * 0.8;
     let tx = cx + Math.cos(a) * d, tz = cz + Math.sin(a) * d;
-    const lim = Math.max(0, 60 - nr);
-    tx = Math.max(-lim, Math.min(lim, tx)); tz = Math.max(-lim, Math.min(lim, tz));
+    const lim = Math.max(0, 100 - nr);
+    tx = Math.max(-lim, Math.min(lim, tx)); tz = Math.max(-lim, Math.min(Math.min(lim, maxZ - nr * 0.5), tz));
     phases.push({ t0: t + wait, t1: t + wait + shrink, fx: cx, fz: cz, fr: r, tx, tz, tr: nr, dps });
     t += wait + shrink; cx = tx; cz = tz; r = nr;
   }
