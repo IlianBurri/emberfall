@@ -634,6 +634,7 @@ export class Game {
       const dmg = s.dmg * fall * (hit.head ? s.headMult : 1);
       if (hit.kind === 'world') {
         const n = this.world.hitNormal;
+        if (n && hit.t < 249) this.fx.bulletHole(this.surfacePoint(end, n), n, s.cls === 'shotgun' ? 0.08 : s.cls === 'sniper' ? 0.14 : 0.1); // Einschussloch
         if (n && n.y > 0.6) { this.fx.burst(end, 6, '#8a7a62', 2.5, 0.5, 6); this.fx.burst(end, 2, '#c8c0b0', 0.8, 0.9, -0.4); } // Staub am Boden
         else { this.fx.burst(end, 4, '#d8d0c0', 3, 0.35); this.fx.burst(end, 2, '#ffd890', 5, 0.12, 9); }                      // Splitter + Funken an Wänden
       }
@@ -664,6 +665,13 @@ export class Game {
     if (this.isHost) this.alertNear(p.pos, p.pos, s.silent ? 9 : 45);
     if (this.isNet) net.send({ t: 'shot', a: muzzleW.toArray().map(r2), b: netShots[0].toArray().map(r2), cls: s.cls, silent: s.silent, hit: true });
     if (w.ammo <= 0 && w.reserve > 0) setTimeout(() => this.reload(), 250);
+  }
+
+  // Treffer am Boden auf flache Deko-Auflagen (Platten, Markierungen ohne Kollision) anheben, sonst lägen Löcher darunter
+  surfacePoint(end, n) {
+    if (n.y < 0.6) return end;
+    const top = this.world.overlayTop(end);
+    return top === null ? end : end.clone().setY(top);
   }
 
   // Hülse fliegt rechts aus dem Auswurffenster und springt über den Boden

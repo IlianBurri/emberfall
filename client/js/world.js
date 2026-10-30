@@ -86,6 +86,17 @@ export class World {
     y0 += this.yOff;
     this.vis.push([cx, y0, cz, sx, sy, sz, color, rx, ry]);
     if (collide) this.boxes.push({ x0: cx - sx / 2, y0, z0: cz - sz / 2, x1: cx + sx / 2, y1: y0 + sy, z1: cz + sz / 2 });
+    // Flache Deko-Auflagen ohne Kollision (Platten, Markierungen): für Einschusslöcher merken
+    else if (sy <= 0.08 && !rx && !ry) (this.overlays || (this.overlays = [])).push({ x0: cx - sx / 2, z0: cz - sz / 2, x1: cx + sx / 2, z1: cz + sz / 2, y0, y1: y0 + sy });
+  }
+  // Oberkante einer flachen Deko-Auflage direkt über Punkt p (oder null) – damit Löcher nicht darunter verschwinden
+  overlayTop(p) {
+    let top = null;
+    for (const o of this.overlays || []) {
+      if (p.x < o.x0 || p.x > o.x1 || p.z < o.z0 || p.z > o.z1 || o.y1 < p.y || o.y0 > p.y + 0.1) continue;
+      if (top === null || o.y1 > top) top = o.y1;
+    }
+    return top;
   }
   // Zylinder (Fässer, Masten, Tanks). Kollision als Box, wenn gewünscht.
   cyl(x, y0, z, r, h, color, collide = false) {

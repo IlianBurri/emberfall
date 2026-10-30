@@ -1,8 +1,9 @@
 // Battle Pass „Glutfunken“: 50 Stufen, Gratis- und Premium-Spur, echte Belohnungen, Einlösen mit Doppel-Schutz.
 // WICHTIG: Der Fortschritt liegt – wie der restliche Spielstand – nur im localStorage dieses Browsers. Das ist ein
-// lokaler Prototyp und kein manipulationssicheres Online-System. Der Premium-Pass kann nicht gekauft werden.
+// lokaler Prototyp und kein manipulationssicheres Online-System. Der Premium-Pass kostet nur Splitter (Ingame-Währung,
+// kein Echtgeld) und ist erst kaufbar, wenn der normale Pass komplett durchgespielt ist (alle Stufen erreicht).
 import { BATTLE_PASS, SKINS, CHAR_ITEMS, RARITY } from './data.js';
-import { profile, save, addCredits, bpInfo } from './profile.js';
+import { profile, save, spend, bpInfo } from './profile.js';
 import { skinPreviewCanvas } from './skins.js';
 import { charSwatch } from './charmenu.js';
 import * as sfx from './audio.js';
@@ -99,8 +100,24 @@ export function rewardState(level, track) {
 }
 export function bpClaimableCount() {
   let n = 0;
-  for (let l = 1; l <= bpInfo().lvl; l++) if (rewardState(l, 'free') === 'ready') n++;
+  for (let l = 1; l <= bpInfo().lvl; l++) for (const tr of ['free', 'premium']) if (rewardState(l, tr) === 'ready') n++;
   return n;
+}
+
+// Premium-Pass: erst nach allen Stufen des normalen Passes, Preis in Splittern
+export function premiumStatus() {
+  const I = bpInfo(), bp = profile.bp, price = BATTLE_PASS.premiumPrice;
+  if (bp.premium) return { state: 'owned', price };
+  if (!I.maxed) return { state: 'locked', price, need: I.max - I.lvl };
+  return { state: profile.credits >= price ? 'buyable' : 'poor', price, missing: price - profile.credits };
+}
+export function buyPremium() {
+  const st = premiumStatus();
+  if (st.state !== 'buyable') return false;
+  if (!spend(st.price)) return false;
+  profile.bp.premium = true;
+  save();
+  return true;
 }
 
 // Gibt die Belohnung aus. Prüft Stufe, Spur und doppeltes Abholen – sonst passiert nichts.
@@ -126,6 +143,14 @@ export function claimBp(level, track) {
 
 export function playerEmblem() { return EMBLEMS[profile.bp.emblem] || EMBLEMS.em_funke; }
 export function playerBanner() { return BANNERS[profile.bp.banner] || BANNERS.bn_standard; }
+
+function premiumBox() {
+  const st = premiumStatus(), price = st.price.toLocaleString('de-CH');
+  if (st.state === 'owned') return `<div class="bp-prem owned">👑 <b>Premium Pass aktiv</b> <span class="dim">– alle Premium-Belohnungen kannst du abholen.</span></div>`;
+  if (st.state === 'locked') return `<div class="bp-prem">🔒 <b>Premium Pass</b> <span class="dim">– wird freigeschaltet, wenn du den normalen Pass durch hast (noch ${st.need} Stufe${st.need > 1 ? 'n' : ''}). Preis: ${price} ◆</span></div>`;
+  return `<div class="bp-prem ready">👑 <b>Premium Pass verfügbar!</b> <span class="dim">${st.state === 'poor' ? `Dir fehlen noch ${st.missing.toLocaleString('de-CH')} ◆.` : 'Du hast den normalen Pass geschafft.'}</span>
+    <button class="primary" id="bpbuy" ${st.state === 'buyable' ? '' : 'disabled'}>Kaufen · ${price} ◆</button></div>`;
+}
 
 // ---------------------------------------------------------------- Menü (wird in App gemischt)
 export const battlePassMenus = {
@@ -160,6 +185,7 @@ export const battlePassMenus = {
         </div>
         <button class="primary" id="bpall" ${claimable ? '' : 'disabled'}>Alle abholen${claimable ? ` (${claimable})` : ''}</button>
       </div>
+      ${premiumBox()}
       <div class="bp-trackwrap">
         <div class="bp-rowlabels"><span></span><span class="free">GRATIS</span><span class="premium">PREMIUM</span></div>
         <div class="bp-track" id="bptrack">${cols.join('')}</div>
@@ -170,7 +196,7 @@ export const battlePassMenus = {
       <div class="card"><b>Profil-Kosmetik</b> <span class="dim">– wird oben rechts und auf deiner Spielerkarte gezeigt</span>
         <div class="row" style="margin-top:8px" id="bpemb">${Object.entries(EMBLEMS).map(([id, e]) => `<button class="small cos ${bp.emblem === id ? 'on' : ''}" data-emb="${id}" ${owned.includes(id) ? '' : 'disabled'} title="${owned.includes(id) ? '' : 'Noch nicht freigeschaltet'}">${e.icon} ${esc(e.name)}</button>`).join('')}</div>
         <div class="row" style="margin-top:8px">${Object.entries(BANNERS).map(([id, b]) => `<button class="small cos ${bp.banner === id ? 'on' : ''}" data-ban="${id}" ${owned.includes(id) ? '' : 'disabled'} style="background:linear-gradient(90deg,${b.colors[0]},${b.colors[1]})">${esc(b.name)}</button>`).join('')}</div></div>
-      <p class="dim bp-note">⚠ Premium-Pass: noch nicht verfügbar – es gibt keine Käufe und kein Echtgeld. Premium-Belohnungen sind nur als Vorschau zu sehen.<br>
+      <p class="dim bp-note">Premium Pass: kaufbar, sobald du alle ${BATTLE_PASS.levels} Stufen erreicht hast – für ${BATTLE_PASS.premiumPrice.toLocaleString('de-CH')} Splitter (Ingame-Währung, kein Echtgeld).<br>
       Fortschritt wird nur lokal in diesem Browser gespeichert (Prototyp, nicht manipulationssicher).</p>`, true);
 
     m.querySelectorAll('[data-ico]').forEach(el => { const [l, tr] = el.dataset.ico.split(':'); el.appendChild(rewardIcon(bpReward(+l, tr), 64)); });
@@ -179,7 +205,7 @@ export const battlePassMenus = {
       const d = $('#bpdetail');
       d.innerHTML = `<span data-big></span><div style="flex:1"><div class="dim">Stufe ${l} · ${tr === 'free' ? 'Gratis' : 'Premium'} · ${esc(info.kind)}</div>
         <h3 style="margin:2px 0;color:${rar.color}">${esc(info.name)}</h3><div class="dim" style="color:${rar.color}">${rar.name}</div></div>
-        ${st === 'ready' ? `<button class="primary" data-claim="${l}:${tr}">Abholen</button>` : `<span class="dim">${st === 'claimed' ? '✔ Abgeholt' : st === 'premium' ? '🔒 Premium nicht verfügbar' : `🔒 Ab Stufe ${l}`}</span>`}`;
+        ${st === 'ready' ? `<button class="primary" data-claim="${l}:${tr}">Abholen</button>` : `<span class="dim">${st === 'claimed' ? '✔ Abgeholt' : st === 'premium' ? '🔒 Premium Pass nötig' : `🔒 Ab Stufe ${l}`}</span>`}`;
       d.querySelector('[data-big]').appendChild(rewardIcon(r, 72));
       const b = d.querySelector('[data-claim]');
       if (b) b.onclick = () => this.bpClaim(l, tr);
@@ -193,9 +219,14 @@ export const battlePassMenus = {
       c.onclick = () => { sfx.sfxUI(); if (rewardState(+l, tr) === 'ready') this.bpClaim(+l, tr); else detail(+l, tr); };
       c.onmouseenter = () => detail(+l, tr);
     });
+    const buy = $('#bpbuy');
+    if (buy) buy.onclick = () => {
+      if (!confirm(`Premium Pass für ${BATTLE_PASS.premiumPrice.toLocaleString('de-CH')} Splitter kaufen? (Nur Ingame-Währung, kein Echtgeld)`)) return;
+      if (buyPremium()) { sfx.sfxUI('legendary'); this.toast('Premium Pass freigeschaltet – alle Premium-Belohnungen sind abholbereit!'); this.battlepass(); }
+    };
     $('#bpall').onclick = () => {
       let n = 0;
-      for (let l = 1; l <= I.lvl; l++) if (claimBp(l, 'free')) n++;
+      for (let l = 1; l <= I.lvl; l++) for (const t of ['free', 'premium']) if (claimBp(l, t)) n++;
       if (n) { sfx.sfxUI('win'); this.toast(`${n} Battle-Pass-Belohnung${n > 1 ? 'en' : ''} abgeholt!`); }
       this.battlepass();
     };
@@ -205,7 +236,10 @@ export const battlePassMenus = {
     // Spur zur aktuellen Stufe (oder zur gerade abgeholten) scrollen
     const tr = $('#bptrack');
     const target = tr.querySelector(`[data-l="${focus || Math.max(1, I.lvl)}"]`);
-    if (target) tr.scrollLeft = target.offsetLeft - tr.clientWidth / 2 + target.offsetWidth / 2;
+    if (target) {
+      const tb = tr.getBoundingClientRect(), cb = target.getBoundingClientRect();
+      tr.scrollTo({ left: tr.scrollLeft + cb.left - tb.left - tb.width / 2 + cb.width / 2, behavior: 'instant' });
+    }
     tr.onwheel = e => { if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { tr.scrollLeft += e.deltaY; e.preventDefault(); } };
     const f = focus || I.lvl;
     detail(f, 'free');

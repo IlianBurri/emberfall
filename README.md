@@ -69,8 +69,11 @@ G Granate · Shift sprinten · C ducken · Leertaste springen · Tab Punktestand
 - **Battle Pass „Glutfunken“:** 50 Stufen (in `data.js` → `BATTLE_PASS` einstellbar), 1000 XP pro Stufe. Pass-XP gibt es für jede Runde
   (gleich viel wie Rang-XP), +400 pro Tagesauftrag, +250 pro Auftrag. Gratis-Spur mit Splittern, XP-Boostern (+25 % für einige Runden),
   exklusiven Skins, Outfit-Teilen, Emblemen und Profil-Bannern. Belohnungen einzeln oder mit „Alle abholen“ einlösen – doppeltes Abholen
-  ist ausgeschlossen. Die **Premium-Spur ist nur eine Vorschau**: Es gibt keinen Kauf und kein Echtgeld.
+  ist ausgeschlossen. Der **Premium Pass** wird freigeschaltet, wenn alle 50 Stufen erreicht sind, und kostet dann
+  10 000 Splitter (Ingame-Währung, kein Echtgeld; Preis in `BATTLE_PASS.premiumPrice`). Danach sind alle Premium-Belohnungen abholbar.
   *Grenze:* Der Pass ist ein lokaler Prototyp im localStorage – nicht manipulationssicher und nicht serverseitig geprüft.
+
+- **Einschusslöcher:** Kugeln hinterlassen Löcher auf Wänden, Boden, Autos und Gegenständen (bis zu 150 gleichzeitig, ein Draw Call).
 
 - **Maps:** Stadt mit Stadtmauer und Toren, drumherum ein Umland mit Hügeln, Feldwegen, Wäldern, Felsen und Orten
   (Bauernhof, Funkhügel, Tankstelle, Tanklager, Depot, Weiler). Berge am Rand bilden die natürliche Grenze, bei Hafen-Maps das Meer.

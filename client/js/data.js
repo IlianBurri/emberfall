@@ -204,7 +204,8 @@ export const CHAR_ITEMS = {
 
 // ---------------------------------------------------------------- Battle Pass
 // Konfigurierbar: Stufenzahl und XP pro Stufe. Belohnungen stehen in battlepass.js.
-export const BATTLE_PASS = { id: 's1', name: 'Saison 1 – Glutfunken', levels: 50, xpPerLevel: 1000 };
+// premiumPrice: Preis in Splittern (Ingame-Währung). Kaufbar erst, wenn alle Stufen erreicht sind.
+export const BATTLE_PASS = { id: 's1', name: 'Saison 1 – Glutfunken', levels: 50, xpPerLevel: 1000, premiumPrice: 10000 };
 export const DEFAULT_CHAR = { uniform: 'u_oliv', pants: 'p_oliv', vest: 'v_oliv', headgear: 'h_helm', mask: 'm_none', eyes: 'e_blau', face: 'f_2' };
 export const CHAR_CASE = {
   id: 'ausruestung', name: 'Ausrüstungskiste', price: 500, color: '#c8a050', desc: 'Outfits für deinen Soldaten – manche gibt es nur hier.',

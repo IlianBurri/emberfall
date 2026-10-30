@@ -1,7 +1,8 @@
 // Effekte mit wenigen Draw Calls: ein Partikel-Points-Objekt, ein LineSegments für Leuchtspuren, ein Pool für Explosionen.
 import * as THREE from 'three';
 
-const PN = 800, TN = 96, LN = 16;
+const _z = new THREE.Vector3(0, 0, 1), _hq = new THREE.Quaternion(), _hr = new THREE.Quaternion(), _hp = new THREE.Vector3(), _hs = new THREE.Vector3(), _hm = new THREE.Matrix4();
+const PN = 800, TN = 96, LN = 16, HN = 150; // HN = gleichzeitig sichtbare Einschusslöcher
 
 export class FX {
   constructor(scene) {
@@ -51,7 +52,37 @@ export class FX {
       scene.add(m);
       this.booms.push({ m, t: 1 });
     }
+    // Einschusslöcher: ein InstancedMesh (1 Draw Call), Ringpuffer – das älteste Loch verschwindet zuerst
+    const hc = document.createElement('canvas'); hc.width = hc.height = 64;
+    const hx = hc.getContext('2d');
+    let g = hx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(0.3, 'rgba(6,5,4,1)'); g.addColorStop(0.36, 'rgba(48,38,28,0.95)');
+    g.addColorStop(0.46, 'rgba(70,58,44,0.6)'); g.addColorStop(0.7, 'rgba(30,24,18,0.18)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    hx.fillStyle = g; hx.fillRect(0, 0, 64, 64);
+    hx.strokeStyle = 'rgba(20,16,12,0.55)'; hx.lineWidth = 1.5; // feine Risse
+    for (let i = 0; i < 7; i++) { const a = Math.random() * 6.28, r0 = 7, r1 = 14 + Math.random() * 12; hx.beginPath(); hx.moveTo(32 + Math.cos(a) * r0, 32 + Math.sin(a) * r0); hx.lineTo(32 + Math.cos(a + 0.2) * r1, 32 + Math.sin(a + 0.2) * r1); hx.stroke(); }
+    const ht = new THREE.CanvasTexture(hc); ht.colorSpace = THREE.SRGBColorSpace;
+    this.holes = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshLambertMaterial({
+      map: ht, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }), HN);
+    this.holes.frustumCulled = false;
+    this.holes.renderOrder = 1;
+    this.hNext = 0;
+    const hide = new THREE.Matrix4().makeScale(0, 0, 0);
+    for (let i = 0; i < HN; i++) this.holes.setMatrixAt(i, hide);
+    scene.add(this.holes);
     this.c = new THREE.Color();
+  }
+
+  // Einschussloch auf eine Oberfläche legen (p = Trefferpunkt, n = Flächennormale)
+  bulletHole(p, n, size = 0.1) {
+    const q = _hq.setFromUnitVectors(_z, n);
+    q.multiply(_hr.setFromAxisAngle(_z, Math.random() * Math.PI * 2)); // zufällig gedreht -> keine Wiederholung sichtbar
+    _hp.copy(p).addScaledVector(n, 0.004);
+    _hs.setScalar(size * (0.8 + Math.random() * 0.45));
+    _hm.compose(_hp, q, _hs);
+    this.holes.setMatrixAt(this.hNext, _hm);
+    this.holes.instanceMatrix.needsUpdate = true;
+    this.hNext = (this.hNext + 1) % HN;
   }
 
   burst(p, n, color, speed = 4, life = 0.5, grav = 9) {
@@ -121,5 +152,5 @@ export class FX {
     }
   }
 
-  dispose() { this.scene.remove(this.points, this.lines, this.lasers, ...this.booms.map(b => b.m)); }
+  dispose() { this.scene.remove(this.points, this.lines, this.lasers, this.holes, ...this.booms.map(b => b.m)); this.holes.geometry.dispose(); this.holes.material.map.dispose(); this.holes.material.dispose(); }
 }
