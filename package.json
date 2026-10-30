@@ -1,0 +1,17 @@
+{
+  "name": "emberfall",
+  "version": "1.0.0",
+  "description": "EMBERFALL – Low-Poly Browser-Shooter mit Story, Koop, PvP und Battle Royale",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "npm install --no-audit --no-fund --silent && node server/server.js",
+    "server": "node server/server.js --no-open"
+  },
+  "dependencies": {
+    "three": "0.170.0",
+    "ws": "8.18.0"
+  }
+}

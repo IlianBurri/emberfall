@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EMBERFALL</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><polygon points='8,1 15,8 8,15 1,8' fill='%23ff7a1a'/></svg>">
+<script type="importmap">{ "imports": { "three": "/vendor/three.module.js" } }</script>
+<style>
+  :root { --acc: #ff7a1a; --acc2: #ffd23a; --bg: rgba(14, 18, 28, 0.86); --line: rgba(255,255,255,0.12); --txt: #eef2f7; --dim: #9aa6b6; --ok: #5dff8a; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #0d1220; color: var(--txt); font-family: "Segoe UI", system-ui, sans-serif; user-select: none; }
+  canvas { display: block; position: fixed; inset: 0; }
+  button { font: inherit; cursor: pointer; border: 0; border-radius: 10px; padding: 10px 16px; background: #2a3346; color: var(--txt); font-weight: 700; transition: transform .08s, background .15s; }
+  button:hover:not(:disabled) { background: #36415a; transform: translateY(-1px); }
+  button.primary { background: linear-gradient(180deg, #ff9a3a, #ff6a00); color: #1a0d00; box-shadow: 0 4px 0 #a84400; }
+  button.primary:hover:not(:disabled) { background: linear-gradient(180deg, #ffb060, #ff7a1a); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.small { padding: 6px 10px; font-size: 13px; border-radius: 8px; }
+  input, select { font: inherit; background: #1b2232; color: var(--txt); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; }
+  input[type=range] { padding: 0; accent-color: var(--acc); }
+  input[type=color] { padding: 0; width: 48px; height: 34px; }
+  h1, h2, h3 { margin: 0 0 10px; }
+  #topbar { position: fixed; top: 0; left: 0; right: 0; height: 56px; display: flex; align-items: center; gap: 18px; padding: 0 22px; background: linear-gradient(180deg, rgba(8,10,18,.9), rgba(8,10,18,0)); z-index: 5; }
+  #topbar .logo { font-weight: 900; font-size: 22px; letter-spacing: 1px; }
+  #topbar .logo span { color: var(--acc); }
+  #topbar .spacer { flex: 1; }
+  #topbar .chip { background: rgba(255,255,255,.08); border-radius: 20px; padding: 6px 14px; font-weight: 700; }
+  #topbar .credits { color: var(--acc2); }
+  .xpbar { width: 120px; height: 6px; background: rgba(255,255,255,.15); border-radius: 4px; overflow: hidden; display: inline-block; vertical-align: middle; margin-left: 8px; }
+  .xpbar i { display: block; height: 100%; background: var(--acc2); }
+  #menu { position: fixed; top: 66px; left: 22px; bottom: 22px; width: min(560px, calc(100vw - 44px)); background: var(--bg); border: 1px solid var(--line); border-radius: 18px; padding: 20px; overflow: auto; z-index: 4; backdrop-filter: blur(6px); }
+  #menu.wide { width: min(980px, calc(100vw - 44px)); }
+  .navgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .navgrid button { text-align: left; padding: 16px; font-size: 17px; }
+  .navgrid button small { display: block; font-weight: 400; color: var(--dim); font-size: 12.5px; margin-top: 3px; }
+  .navgrid .big { grid-column: span 2; font-size: 21px; }
+  .badge { background: #ff3a3a; color: #fff; border-radius: 10px; padding: 1px 7px; font-size: 12px; margin-left: 6px; }
+  .back { margin-bottom: 14px; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .card { background: rgba(255,255,255,.05); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 10px; }
+  .card.sel { border-color: var(--acc); background: rgba(255,122,26,.1); }
+  .card.locked { opacity: .5; }
+  .dim { color: var(--dim); font-size: 13.5px; }
+  .grid3 { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .stat { display: grid; grid-template-columns: 110px 1fr 44px; align-items: center; gap: 8px; font-size: 13px; margin: 3px 0; }
+  .stat .b { height: 8px; background: rgba(255,255,255,.1); border-radius: 4px; overflow: hidden; }
+  .stat .b i { display: block; height: 100%; background: var(--acc); }
+  .skinbox { display: inline-flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px; border-radius: 10px; border: 2px solid transparent; cursor: pointer; width: 84px; font-size: 11.5px; text-align: center; }
+  .skinbox canvas { position: static; width: 56px; height: 56px; border-radius: 8px; }
+  .skinbox.sel { border-color: var(--acc); }
+  .tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+  .tabs button.on { background: var(--acc); color: #1a0d00; }
+  .prog { height: 8px; background: rgba(255,255,255,.1); border-radius: 4px; overflow: hidden; margin: 6px 0; }
+  .prog i { display: block; height: 100%; background: var(--ok); }
+  table { border-collapse: collapse; width: 100%; }
+  td, th { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--line); }
+  /* Kisten */
+  #modal { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: none; align-items: center; justify-content: center; z-index: 20; }
+  #modal .box { background: #131a2a; border: 1px solid var(--line); border-radius: 18px; padding: 24px; width: min(900px, 94vw); text-align: center; }
+  .strip-wrap { position: relative; overflow: hidden; height: 130px; border-radius: 12px; background: #0b0f1a; margin: 16px 0; }
+  .strip-wrap::after { content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 3px; background: var(--acc2); transform: translateX(-50%); box-shadow: 0 0 12px var(--acc2); }
+  .strip { position: absolute; left: 0; top: 10px; display: flex; gap: 8px; will-change: transform; }
+  .strip .it { width: 110px; height: 110px; border-radius: 10px; background: #1b2232; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 11px; border-bottom: 5px solid; flex: none; }
+  .strip .it canvas { position: static; width: 64px; height: 64px; border-radius: 8px; margin-bottom: 4px; }
+  /* HUD */
+  #hud { position: fixed; inset: 0; pointer-events: none; display: none; z-index: 3; font-weight: 700; text-shadow: 0 2px 3px rgba(0,0,0,.6); }
+  #crosshair { position: absolute; left: 50%; top: 50%; }
+  #crosshair i { position: absolute; background: #fff; box-shadow: 0 0 2px #000; }
+  #crosshair i:nth-child(1), #crosshair i:nth-child(2) { width: 2px; height: 10px; }
+  #crosshair i:nth-child(3), #crosshair i:nth-child(4) { width: 10px; height: 2px; }
+  #crosshair b { position: absolute; width: 3px; height: 3px; background: #fff; border-radius: 2px; transform: translate(-50%,-50%); }
+  #hitmarker { position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; transform: translate(-50%,-50%) rotate(45deg); opacity: 0; }
+  #hitmarker::before, #hitmarker::after { content: ''; position: absolute; background: #fff; }
+  #hitmarker::before { left: 12px; top: 0; width: 2px; height: 26px; }
+  #hitmarker::after { top: 12px; left: 0; height: 2px; width: 26px; }
+  #hitmarker.show { opacity: 1; }
+  #hitmarker.head::before, #hitmarker.head::after { background: var(--acc2); }
+  #hitmarker.kill::before, #hitmarker.kill::after { background: #ff3a3a; }
+  #hitmarker.kill { width: 36px; height: 36px; }
+  #scope { position: absolute; inset: 0; display: none; background: radial-gradient(circle at center, transparent 0, transparent 37vh, #000 37.3vh); }
+  #scope div { position: absolute; left: 50%; top: 50%; width: 74vh; height: 74vh; transform: translate(-50%,-50%);
+    background: linear-gradient(#000,#000) center/1.5px 100% no-repeat, linear-gradient(#000,#000) center/100% 1.5px no-repeat; }
+  #vignette { position: absolute; inset: 0; opacity: 0; background: radial-gradient(circle at center, transparent 45%, rgba(220,20,20,.65) 100%); }
+  #objective { position: absolute; top: 16px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,.45); padding: 8px 18px; border-radius: 10px; font-size: 17px; white-space: nowrap; }
+  #timer { position: absolute; top: 58px; left: 50%; transform: translateX(-50%); font-size: 18px; }
+  #radio { position: absolute; bottom: 150px; left: 50%; transform: translateX(-50%); background: rgba(10,40,30,.6); border-left: 4px solid var(--ok); padding: 8px 16px; border-radius: 6px; opacity: 0; transition: opacity .4s; max-width: 70vw; }
+  #center-msg { position: absolute; top: 30%; left: 50%; transform: translateX(-50%); font-size: 30px; font-weight: 900; opacity: 0; transition: opacity .5s; text-align: center; }
+  #killfeed { position: absolute; top: 16px; right: 18px; text-align: right; font-size: 14px; }
+  #killfeed div { background: rgba(0,0,0,.45); padding: 4px 10px; border-radius: 6px; margin-bottom: 4px; }
+  #killfeed span { color: var(--acc2); }
+  #feed { position: absolute; left: 50%; top: 58%; transform: translateX(-50%); text-align: center; color: var(--acc2); font-size: 16px; }
+  #hpbox { position: absolute; left: 22px; bottom: 22px; width: 240px; }
+  #hpbox .bar { height: 14px; background: rgba(0,0,0,.5); border-radius: 7px; overflow: hidden; border: 2px solid rgba(255,255,255,.3); }
+  #hpbox .bar i { display: block; height: 100%; width: 100%; transition: width .15s; }
+  #hpbox span { font-size: 26px; }
+  #hpbox .bar.armor { height: 9px; margin-bottom: 4px; display: none; border-width: 1px; }
+  #hpbox .bar.armor i { background: #4aa3ff; width: 0; }
+  #brinfo { position: absolute; top: 58px; left: 50%; transform: translateX(-50%); font-size: 16px; text-align: center; background: rgba(0,0,0,.35); padding: 5px 14px; border-radius: 8px; }
+  #lootprompt { position: absolute; top: 62%; left: 50%; transform: translateX(-50%); font-size: 17px; display: none; background: rgba(0,0,0,.5); padding: 6px 14px; border-radius: 8px; }
+  #lootprompt span { display: inline-block; background: #fff; color: #000; border-radius: 5px; padding: 0 8px; margin-right: 6px; }
+  #zonewarn { position: absolute; top: 40%; left: 50%; transform: translateX(-50%); font-size: 22px; color: #6ab8ff; display: none; animation: blink 1s infinite; }
+  @keyframes blink { 50% { opacity: .4; } }
+  #hpbox em { color: #ff4a6a; font-style: normal; margin-left: 10px; font-size: 20px; }
+  #ammo { position: absolute; right: 26px; bottom: 22px; text-align: right; }
+  #ammo b { font-size: 46px; }
+  #ammo span { font-size: 22px; color: #ccd; }
+  #ammo .wname { font-size: 15px; color: var(--acc2); }
+  #ammo .nades { font-size: 14px; color: #bfe0a0; }
+  #ammo .reload { display: none; color: var(--acc2); }
+  #bossbar { position: absolute; top: 90px; left: 50%; transform: translateX(-50%); width: 420px; display: none; text-align: center; }
+  #bossbar div { height: 12px; background: rgba(0,0,0,.5); border-radius: 6px; overflow: hidden; border: 2px solid #ffcc33; }
+  #bossbar i { display: block; height: 100%; background: linear-gradient(90deg, #ff3a2a, #ff9a2a); }
+  .esp { position: absolute; left: 0; top: 0; border: 2px solid #ff2a6a; box-shadow: 0 0 6px #ff2a6a; border-radius: 3px; }
+  .esp span { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: 11px; color: #ff9ab8; margin-bottom: 2px; }
+  .esp i { position: absolute; left: -7px; top: 0; bottom: 0; width: 4px; background: rgba(0,0,0,.5); }
+  .esp i b { position: absolute; bottom: 0; left: 0; right: 0; background: #5dff8a; }
+  .marker { position: absolute; left: 0; top: 0; margin: -12px 0 0 -40px; width: 80px; text-align: center; color: #3affd0; font-size: 12.5px; }
+  .marker::before { content: '◆'; display: block; font-size: 20px; }
+  .marker.enemy { color: #ff4a3a; }
+  .marker.enemy::before { content: '▼'; font-size: 14px; }
+  #scoreboard { position: absolute; top: 20%; left: 50%; transform: translateX(-50%); background: rgba(10,14,24,.9); padding: 20px 26px; border-radius: 14px; display: none; min-width: 380px; }
+  #fps { position: absolute; left: 10px; top: 8px; font-size: 12px; color: #9fa; font-weight: 400; }
+  #hint { position: absolute; bottom: 70px; left: 50%; transform: translateX(-50%); font-size: 13px; color: #dde; font-weight: 400; background: rgba(0,0,0,.4); padding: 6px 12px; border-radius: 8px; transition: opacity 1s; text-align: center; max-width: 90vw; }
+  #pause { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(5,8,15,.6); z-index: 10; }
+  #pause .box { background: var(--bg); border: 1px solid var(--line); border-radius: 18px; padding: 28px; width: 440px; max-width: 94vw; max-height: 94vh; overflow: auto; display: flex; flex-direction: column; gap: 10px; text-align: center; }
+  #toast { position: fixed; top: 66px; right: 22px; z-index: 30; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; pointer-events: none; }
+  #toast div { background: rgba(20,26,40,.95); border: 1px solid var(--acc); padding: 10px 14px; border-radius: 10px; font-weight: 700; animation: tin .3s; }
+  @keyframes tin { from { transform: translateX(30px); opacity: 0; } }
+  #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 22px; z-index: 50; background: #0d1220; }
+</style>
+</head>
+<body>
+  <div id="loading">Lade EMBERFALL …</div>
+  <div id="topbar"></div>
+  <div id="menu"></div>
+  <div id="hud"></div>
+  <div id="pause"><div class="box">
+    <h2>Pausiert</h2>
+    <button class="primary" id="resume">Weiterspielen (Klick)</button>
+    <label class="dim">Mausempfindlichkeit <input type="range" id="psens" min="0.2" max="3" step="0.05"></label>
+    <button id="pcheats" style="display:none">🕹 Cheats</button>
+    <div id="pcheatpanel" style="display:none;text-align:left;max-height:50vh;overflow:auto"></div>
+    <button id="quit">Runde verlassen</button>
+    <p class="dim" id="pausenote"></p>
+  </div></div>
+  <div id="modal"></div>
+  <div id="toast"></div>
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>

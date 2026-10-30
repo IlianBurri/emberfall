@@ -1,0 +1,12 @@
+# Render-Blueprint: Render liest diese Datei und richtet den Webdienst automatisch ein.
+services:
+  - type: web
+    name: emberfall
+    runtime: node
+    plan: free
+    buildCommand: npm install --no-audit --no-fund
+    startCommand: npm run server
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
