@@ -43,6 +43,10 @@
   #topbar .chip.btn { cursor: pointer; transition: background .15s, border-color .15s; }
   #topbar .chip.btn:hover { background: rgba(255,255,255,.1); border-color: rgba(255,122,26,.5); }
   #topbar .credits { color: var(--acc2); }
+  .ic { width: 1.1em; height: 1.1em; vertical-align: -0.18em; display: inline-block; flex: none; }
+  #topbar .emb .ic { width: 16px; height: 16px; vertical-align: 0; }
+  #nav .item i .ic { width: 18px; height: 18px; vertical-align: -3px; }
+  #nav .pcard .e .ic { width: 26px; height: 26px; vertical-align: 0; }
   #topbar .emb { width: 26px; height: 26px; border-radius: 6px; display: grid; place-items: center; font-size: 15px; }
   #topbar .lv { display: grid; place-items: center; min-width: 30px; height: 26px; border-radius: 6px; background: var(--acc); color: #1a0d00; font-weight: 900; }
   .xpbar { width: 110px; height: 5px; background: rgba(255,255,255,.14); border-radius: 3px; overflow: hidden; display: inline-block; vertical-align: middle; }
@@ -262,7 +266,7 @@
     <h2>Pausiert</h2>
     <button class="primary" id="resume">Weiterspielen (Klick)</button>
     <label class="dim">Mausempfindlichkeit <input type="range" id="psens" min="0.2" max="3" step="0.05"></label>
-    <button id="pcheats" style="display:none">🕹 Cheats</button>
+    <button id="pcheats" style="display:none"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a2.5 2.5 0 1 0 0 5a2.5 2.5 0 1 0 0-5z M12 8v7 M4 15h16v5H4z M7 17.5h2"/></svg> Cheats</button>
     <div id="pcheatpanel" style="display:none;text-align:left;max-height:50vh;overflow:auto"></div>
     <button id="quit">Runde verlassen</button>
     <p class="dim" id="pausenote"></p>

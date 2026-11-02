@@ -6,6 +6,7 @@ import { BATTLE_PASS, SKINS, CHAR_ITEMS, RARITY } from './data.js';
 import { profile, save, spend, bpInfo } from './profile.js';
 import { skinPreviewCanvas } from './skins.js';
 import { charSwatch } from './charmenu.js';
+import { ic, drawIcon } from './icons.js';
 import * as sfx from './audio.js';
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -13,14 +14,16 @@ const $ = s => document.querySelector(s);
 
 // ---------------------------------------------------------------- Profil-Kosmetik (Embleme & Banner)
 export const EMBLEMS = {
-  em_funke: { name: 'Funke', icon: '✦', rarity: 'common' },
-  em_zahnrad: { name: 'Zahnrad', icon: '⚙', rarity: 'common' },
-  em_flamme: { name: 'Flamme', icon: '🔥', rarity: 'rare' },
-  em_schild: { name: 'Schild', icon: '🛡', rarity: 'rare' },
-  em_wolf: { name: 'Wolf', icon: '🐺', rarity: 'epic' },
-  em_glutkern: { name: 'Glutkern', icon: '◈', rarity: 'legendary' },
-  em_phoenix: { name: 'Phönix', icon: '🦅', rarity: 'epic', premium: true },
+  em_funke: { name: 'Funke', ico: 'spark', rarity: 'common' },
+  em_zahnrad: { name: 'Zahnrad', ico: 'gear', rarity: 'common' },
+  em_flamme: { name: 'Flamme', ico: 'flame', rarity: 'rare' },
+  em_schild: { name: 'Schild', ico: 'shield', rarity: 'rare' },
+  em_wolf: { name: 'Wolf', ico: 'wolf', rarity: 'epic' },
+  em_glutkern: { name: 'Glutkern', ico: 'core', rarity: 'legendary' },
+  em_phoenix: { name: 'Phönix', ico: 'phoenix', rarity: 'epic', premium: true },
 };
+// icon = Inline-SVG fürs HTML, ico = Name fürs Canvas
+for (const e of Object.values(EMBLEMS)) e.icon = ic(e.ico);
 export const BANNERS = {
   bn_standard: { name: 'Standard', colors: ['#2a3346', '#1a2030'], rarity: 'common' },
   bn_rost: { name: 'Rost', colors: ['#6a3420', '#2a1810'], rarity: 'common' },
@@ -83,7 +86,7 @@ export function rewardIcon(r, size = 72) {
     x.fillStyle = '#5dff8a'; x.font = `900 ${size * 0.34}px system-ui`; x.fillText('XP', size / 2, size * 0.42);
     x.font = `800 ${size * 0.18}px system-ui`; x.fillText('+25%', size / 2, size * 0.76);
   } else if (r.type === 'emblem') {
-    x.fillStyle = '#ffffff'; x.font = `${size * 0.52}px system-ui`; x.fillText(EMBLEMS[r.id].icon, size / 2, size / 2 + 2);
+    drawIcon(x, EMBLEMS[r.id].ico, size * 0.24, size * 0.24, size * 0.52);
   } else if (r.type === 'banner') {
     x.fillStyle = 'rgba(255,255,255,.18)'; x.fillRect(size * 0.12, size * 0.6, size * 0.76, size * 0.12);
   }
@@ -146,9 +149,9 @@ export function playerBanner() { return BANNERS[profile.bp.banner] || BANNERS.bn
 
 function premiumBox() {
   const st = premiumStatus(), price = st.price.toLocaleString('de-CH');
-  if (st.state === 'owned') return `<div class="bp-prem owned">👑 <b>Premium Pass aktiv</b> <span class="dim">– alle Premium-Belohnungen kannst du abholen.</span></div>`;
-  if (st.state === 'locked') return `<div class="bp-prem">🔒 <b>Premium Pass</b> <span class="dim">– wird freigeschaltet, wenn du den normalen Pass durch hast (noch ${st.need} Stufe${st.need > 1 ? 'n' : ''}). Preis: ${price} ◆</span></div>`;
-  return `<div class="bp-prem ready">👑 <b>Premium Pass verfügbar!</b> <span class="dim">${st.state === 'poor' ? `Dir fehlen noch ${st.missing.toLocaleString('de-CH')} ◆.` : 'Du hast den normalen Pass geschafft.'}</span>
+  if (st.state === 'owned') return `<div class="bp-prem owned">${ic('crown')} <b>Premium Pass aktiv</b> <span class="dim">– alle Premium-Belohnungen kannst du abholen.</span></div>`;
+  if (st.state === 'locked') return `<div class="bp-prem">${ic('lock')} <b>Premium Pass</b> <span class="dim">– wird freigeschaltet, wenn du den normalen Pass durch hast (noch ${st.need} Stufe${st.need > 1 ? 'n' : ''}). Preis: ${price} ◆</span></div>`;
+  return `<div class="bp-prem ready">${ic('crown')} <b>Premium Pass verfügbar!</b> <span class="dim">${st.state === 'poor' ? `Dir fehlen noch ${st.missing.toLocaleString('de-CH')} ◆.` : 'Du hast den normalen Pass geschafft.'}</span>
     <button class="primary" id="bpbuy" ${st.state === 'buyable' ? '' : 'disabled'}>Kaufen · ${price} ◆</button></div>`;
 }
 
@@ -169,7 +172,7 @@ export const battlePassMenus = {
           return `<button class="bp-card ${tr} st-${st}" data-card="${l}:${tr}" style="--rc:${RARITY[info.rarity].color}" title="${esc(info.name)}">
             <span class="bp-ico" data-ico="${l}:${tr}"></span>
             <span class="bp-name">${esc(info.name)}</span>
-            <span class="bp-state">${st === 'claimed' ? '✔ Abgeholt' : st === 'ready' ? 'Abholen' : st === 'premium' ? '🔒 Premium' : '🔒 Stufe ' + l}</span>
+            <span class="bp-state">${st === 'claimed' ? ic('check') + ' Abgeholt' : st === 'ready' ? 'Abholen' : st === 'premium' ? ic('lock') + ' Premium' : ic('lock') + ' Stufe ' + l}</span>
           </button>`;
         }).join('')}
       </div>`);
@@ -205,7 +208,7 @@ export const battlePassMenus = {
       const d = $('#bpdetail');
       d.innerHTML = `<span data-big></span><div style="flex:1"><div class="dim">Stufe ${l} · ${tr === 'free' ? 'Gratis' : 'Premium'} · ${esc(info.kind)}</div>
         <h3 style="margin:2px 0;color:${rar.color}">${esc(info.name)}</h3><div class="dim" style="color:${rar.color}">${rar.name}</div></div>
-        ${st === 'ready' ? `<button class="primary" data-claim="${l}:${tr}">Abholen</button>` : `<span class="dim">${st === 'claimed' ? '✔ Abgeholt' : st === 'premium' ? '🔒 Premium Pass nötig' : `🔒 Ab Stufe ${l}`}</span>`}`;
+        ${st === 'ready' ? `<button class="primary" data-claim="${l}:${tr}">Abholen</button>` : `<span class="dim">${st === 'claimed' ? ic('check') + ' Abgeholt' : st === 'premium' ? ic('lock') + ' Premium Pass nötig' : `${ic('lock')} Ab Stufe ${l}`}</span>`}`;
       d.querySelector('[data-big]').appendChild(rewardIcon(r, 72));
       const b = d.querySelector('[data-claim]');
       if (b) b.onclick = () => this.bpClaim(l, tr);

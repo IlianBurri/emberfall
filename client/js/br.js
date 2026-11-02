@@ -1,4 +1,5 @@
 // Battle Royale im Browser: Loot am Boden, schrumpfende Zone, Fallschirmsprung, Zuschauen nach dem Ausscheiden.
+import { ic } from './icons.js';
 import * as THREE from 'three';
 import { WEAPONS, ATTACHMENTS, ATTACH_SLOTS } from './data.js';
 import { mulberry, zoneAt } from './zone.js';
@@ -94,7 +95,7 @@ export class BattleRoyale {
     this.specIdx = 0;
     this.t = 0;
     const hud = document.getElementById('hud');
-    hud.insertAdjacentHTML('beforeend', '<div id="brinfo"></div><div id="lootprompt"></div><div id="zonewarn">⚠ Außerhalb der Zone – lauf zum blauen Kreis!</div>');
+    hud.insertAdjacentHTML('beforeend', '<div id="brinfo"></div><div id="lootprompt"></div><div id="zonewarn">' + ic('warn') + ' Außerhalb der Zone – lauf zum blauen Kreis!</div>');
     this.h = { info: hud.querySelector('#brinfo'), prompt: hud.querySelector('#lootprompt'), warn: hud.querySelector('#zonewarn') };
   }
 
@@ -127,7 +128,7 @@ export class BattleRoyale {
     h.warn.style.display = outside && p.alive ? 'block' : 'none';
     const mm = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
     const zoneTxt = z.next ? (z.shrinking ? `Zone schrumpft! ${mm(z.nextIn)}` : `Zone schrumpft in ${mm(z.nextIn)}`) : 'Letzte Zone';
-    h.info.innerHTML = `<b>${this.alive}</b> Spieler übrig · ${zoneTxt}${p.chute ? '<br>🪂 Fallschirm – mit WASD steuern' : ''}`;
+    h.info.innerHTML = `<b>${this.alive}</b> Spieler übrig · ${zoneTxt}${p.chute ? '<br>' + ic('parachute') + ' Fallschirm – mit WASD steuern' : ''}`;
     if (this.near) {
       const it = this.near;
       const name = it.kind === 'weapon' ? `${WEAPONS[it.id].name}${it.rarity ? ` (+${Object.keys(it.build).length} Aufsätze)` : ''}` : KIND_NAME[it.kind];
@@ -166,7 +167,7 @@ export class BattleRoyale {
     const back = new THREE.Vector3(Math.sin(r.yaw) * 3.5, 2.4, Math.cos(r.yaw) * 3.5);
     cam.position.copy(r.pos).add(back);
     cam.lookAt(r.pos.x, r.pos.y + 1.5, r.pos.z);
-    this.h.info.innerHTML += `<br>👁 Du schaust <b>${r.tag ? (this.game.names.get(r.id) || '') : ''}</b> zu – Klick wechselt`;
+    this.h.info.innerHTML += `<br>${ic('eye')} Du schaust <b>${r.tag ? (this.game.names.get(r.id) || '') : ''}</b> zu – Klick wechselt`;
     return true;
   }
 

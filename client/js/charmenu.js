@@ -4,24 +4,19 @@ import { CHAR_ITEMS, CHAR_SLOTS, CHAR_CASE, CHEAT_CODE, MISSIONS, RARITY } from 
 import { profile, save, spend, ownsChar, lookFromProfile, DEFAULT_CHEATS } from './profile.js';
 import { net } from './net.js';
 import * as sfx from './audio.js';
+import { ic, slotIc, drawClothIcon } from './icons.js';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const ICON = { uniform: '👕', pants: '👖', vest: '🦺', headgear: '⛑', mask: '🎭', eyes: '🥽', face: '🙂' };
 
-// Kleines Vorschaubild für ein Ausrüstungsteil (Farbfeld + Symbol)
+// Kleines Vorschaubild für ein Ausrüstungsteil (schwarz-weisses Icon in Form des Teils)
 export function charSwatch(item, size = 56) {
   const c = document.createElement('canvas');
-  c.width = c.height = size;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  c.width = c.height = Math.round(size * dpr);
   const x = c.getContext('2d');
-  const g = x.createLinearGradient(0, 0, size, size);
-  g.addColorStop(0, item.color);
-  g.addColorStop(1, new THREE.Color(item.color).multiplyScalar(0.6).getStyle());
-  x.fillStyle = g;
-  x.fillRect(0, 0, size, size);
-  x.font = `${Math.round(size * 0.5)}px system-ui`;
-  x.textAlign = 'center'; x.textBaseline = 'middle';
-  x.fillText(ICON[item.slot] || '◆', size / 2, size / 2 + 2);
+  x.scale(dpr, dpr);
+  drawClothIcon(x, item, size);
   c.style.cssText = `position:static;width:${size}px;height:${size}px;border-radius:8px`;
   return c;
 }
@@ -50,9 +45,9 @@ export const characterMenus = {
     const items = Object.entries(CHAR_ITEMS).filter(([, it]) => it.slot === slot);
     const m = this.menu(`<button class="back small" data-go="home">← Zurück</button><h2>Charakter</h2>
       <p class="dim">Rüste deinen Soldaten aus. Mitspieler im LAN sehen dein Outfit. Neue Teile gibt es im Shop, in der Ausrüstungskiste oder als Belohnung für Story-Missionen.</p>
-      <div class="tabs" style="flex-wrap:wrap">${Object.entries(CHAR_SLOTS).map(([k, n]) => `<button class="small ${k === slot ? 'on' : ''}" data-slot="${k}">${ICON[k]} ${n}</button>`).join('')}</div>
+      <div class="tabs" style="flex-wrap:wrap">${Object.entries(CHAR_SLOTS).map(([k, n]) => `<button class="small ${k === slot ? 'on' : ''}" data-slot="${k}">${slotIc(k)} ${n}</button>`).join('')}</div>
       <div class="grid3" id="charitems"></div>
-      <div class="row" style="margin-top:12px"><button data-go="shop" class="small">🛒 Ausrüstung im Shop</button><button class="small" id="tochest">📦 Ausrüstungskiste</button></div>`);
+      <div class="row" style="margin-top:12px"><button data-go="shop" class="small">${ic('cart')} Ausrüstung im Shop</button><button class="small" id="tochest">${ic('box')} Ausrüstungskiste</button></div>`);
     m.querySelectorAll('[data-slot]').forEach(b => b.onclick = () => { sfx.sfxUI(); this.charakter(b.dataset.slot); });
     $('#tochest').onclick = () => this.cases();
     const grid = $('#charitems');
@@ -63,7 +58,7 @@ export const characterMenus = {
       card.style.cssText = 'cursor:pointer;text-align:center;margin:0';
       card.appendChild(charSwatch(it));
       card.insertAdjacentHTML('beforeend', `<div style="font-weight:700;color:${RARITY[it.rarity].color}">${esc(it.name)}</div>
-        <div class="dim" style="font-size:12px">${eq ? '✔ Angelegt' : own ? 'Klicken zum Anlegen' : '🔒 ' + esc(unlockText(it))}</div>
+        <div class="dim" style="font-size:12px">${eq ? ic('check') + ' Angelegt' : own ? 'Klicken zum Anlegen' : ic('lock') + ' ' + esc(unlockText(it))}</div>
         ${!own && it.price && !it.mission && !it.case ? `<button class="small primary" style="margin-top:6px" ${profile.credits < it.price ? 'disabled' : ''}>Kaufen ${it.price} ◆</button>` : ''}`);
       card.onmouseenter = () => this.showCharacter(lookFromProfile({ ...profile.character, [slot]: id }));
       card.onmouseleave = () => this.showCharacter();
@@ -86,11 +81,11 @@ export const characterMenus = {
     return Object.entries(CHAR_SLOTS).map(([slot, name]) => {
       const list = Object.entries(CHAR_ITEMS).filter(([, it]) => it.slot === slot && (it.price || it.mission || it.case) && !it.free);
       if (!list.length) return '';
-      return `<h3>${ICON[slot]} ${name}</h3>` + list.map(([id, it]) => {
+      return `<h3>${slotIc(slot)} ${name}</h3>` + list.map(([id, it]) => {
         const own = ownsChar(id);
         const btn = own ? '<button class="small" disabled>Besitzt du</button>'
           : it.price && !it.case && !it.mission ? `<button class="small primary" data-buyc="${id}" ${profile.credits < it.price ? 'disabled' : ''}>${it.price} ◆</button>`
-            : `<span class="dim">🔒 ${esc(unlockText(it))}</span>`;
+            : `<span class="dim">${ic('lock')} ${esc(unlockText(it))}</span>`;
         return `<div class="card row" style="justify-content:space-between" data-prevc="${id}"><div class="row"><span data-sw="${id}"></span><div><b style="color:${RARITY[it.rarity].color}">${esc(it.name)}</b><div class="dim">${RARITY[it.rarity].name}</div></div></div>${btn}</div>`;
       }).join('');
     }).join('');
@@ -109,10 +104,10 @@ export const characterMenus = {
 
   // Shop-Reiter: Codes
   shopCodes() {
-    return `<div class="card"><h3>🔑 Code einlösen</h3>
+    return `<div class="card"><h3>${ic('key')} Code einlösen</h3>
       <div class="row"><input id="codein" placeholder="Code eingeben …" style="flex:1;min-width:220px" autocomplete="off"><button class="primary" id="codego">Einlösen</button></div>
       <p class="dim" id="codemsg"></p></div>
-      ${profile.cheatsUnlocked ? '<div class="card"><b>🕹 Cheat-Menü freigeschaltet</b><div class="row" style="margin-top:8px"><button class="primary small" data-go="cheats">Cheat-Menü öffnen</button></div></div>' : ''}`;
+      ${profile.cheatsUnlocked ? '<div class="card"><b>' + ic('joystick') + ' Cheat-Menü freigeschaltet</b><div class="row" style="margin-top:8px"><button class="primary small" data-go="cheats">Cheat-Menü öffnen</button></div></div>' : ''}`;
   },
   bindShopCodes() {
     const go = () => {
@@ -135,7 +130,7 @@ export const characterMenus = {
   cheats() {
     if (!profile.cheatsUnlocked) return this.shop('codes');
     this.showCharacter();
-    const m = this.menu(`<button class="back small" data-go="home">← Zurück</button><h2>🕹 Cheat-Menü</h2>
+    const m = this.menu(`<button class="back small" data-go="home">← Zurück</button><h2>${ic('joystick')} Cheat-Menü</h2>
       <p class="dim">Gilt in allen Modi. Auch im Spiel über das Pause-Menü (Esc) änderbar.</p><div id="cheatpanel"></div>`);
     cheatPanel(m.querySelector('#cheatpanel'));
   },
@@ -148,10 +143,10 @@ export function cheatPanel(el, onChange = () => {}) {
   const rng = (k, label, min, max, step, unit = '') => `<div class="row" style="justify-content:space-between;margin:6px 0"><span>${label}</span><span class="row"><input type="range" data-k="${k}" min="${min}" max="${max}" step="${step}" value="${c[k]}" style="width:150px"><b data-v="${k}" style="width:56px;text-align:right">${c[k]}${unit}</b></span></div>`;
   el.innerHTML = `
     <div class="card" style="border-color:${c.enabled ? '#5dff8a' : 'var(--line)'}">${tog('enabled', '<b>Cheats aktiv</b>', '(Hauptschalter)')}</div>
-    <div class="card"><b>👁 Sicht</b>
+    <div class="card"><b>${ic('eye')} Sicht</b>
       ${tog('wallhack', 'Wallhack', '– Gegner leuchten durch Wände')}
       ${tog('esp', 'ESP-Boxen', '– Rahmen, Name, Entfernung, Leben')}</div>
-    <div class="card"><b>🎯 Aimbot</b>
+    <div class="card"><b>${ic('target')} Aimbot</b>
       ${tog('aimbot', 'Aimbot an')}
       <div class="row" style="justify-content:space-between;margin:6px 0"><span>Auslösen</span><select data-k="aimMode">
         <option value="zielen" ${c.aimMode === 'zielen' ? 'selected' : ''}>Beim Zielen (Rechtsklick)</option>
@@ -161,10 +156,10 @@ export function cheatPanel(el, onChange = () => {}) {
         <option value="kopf" ${c.aimBone === 'kopf' ? 'selected' : ''}>Kopf</option><option value="koerper" ${c.aimBone === 'koerper' ? 'selected' : ''}>Körper</option></select></div>
       ${rng('aimFov', 'Sichtfeld (FOV)', 5, 180, 1, '°')}
       ${rng('aimSmooth', 'Geschwindigkeit', 1, 40, 1)}</div>
-    <div class="card"><b>🏃 Bewegung</b>
+    <div class="card"><b>${ic('run')} Bewegung</b>
       ${rng('speed', 'Super-Speed', 1, 4, 0.1, '×')}
       ${rng('jump', 'Super-Jump', 1, 6, 0.1, '×')}</div>
-    <div class="card"><b>❤ Überleben & Waffen</b>
+    <div class="card"><b>${ic('heart')} Überleben & Waffen</b>
       ${rng('maxHp', 'Max. Leben', 100, 1000, 25, ' HP')}
       ${tog('god', 'Unverwundbar (Godmode)')}
       ${tog('infAmmo', 'Unendlich Munition')}

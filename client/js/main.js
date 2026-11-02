@@ -15,6 +15,7 @@ import { lookFromProfile } from './profile.js';
 import { MenuStage } from './menustage.js';
 import { battlePassMenus, bpClaimableCount, playerEmblem, playerBanner } from './battlepass.js';
 import { loadCharacters } from './characters.js';
+import { ic } from './icons.js';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -26,13 +27,13 @@ const QUALITY = {
 
 // Linke Navigation: Bereiche und ihre Unterseiten (alle vorhandenen Menüs bleiben erreichbar)
 const NAV = [
-  { id: 'play', label: 'Spielen', icon: '▶', sub: [['story', 'Kampagne'], ['lobby', 'Koop & PvP']], hidden: ['roomsView', 'roomView'] },
-  { id: 'loadout', label: 'Loadout', icon: '🪖', sub: [['charakter', 'Charakter'], ['loadout', 'Waffen']] },
-  { id: 'armory', label: 'Arsenal', icon: '🛒', sub: [['shop', 'Shop'], ['cases', 'Kisten'], ['skinEditor', 'Skin-Editor']] },
-  { id: 'battlepass', label: 'Battle Pass', icon: '★', sub: [['battlepass', 'Battle Pass']] },
-  { id: 'quests', label: 'Quests', icon: '📜', sub: [['quests', 'Quests']] },
-  { id: 'settings', label: 'Einstellungen', icon: '⚙', sub: [['settings', 'Einstellungen'], ['help', 'Steuerung']] },
-  { id: 'cheats', label: 'Cheats', icon: '🕹', sub: [['cheats', 'Cheats']], when: () => profile.cheatsUnlocked },
+  { id: 'play', label: 'Spielen', icon: ic('play'), sub: [['story', 'Kampagne'], ['lobby', 'Koop & PvP']], hidden: ['roomsView', 'roomView'] },
+  { id: 'loadout', label: 'Loadout', icon: ic('helmet'), sub: [['charakter', 'Charakter'], ['loadout', 'Waffen']] },
+  { id: 'armory', label: 'Arsenal', icon: ic('cart'), sub: [['shop', 'Shop'], ['cases', 'Kisten'], ['skinEditor', 'Skin-Editor']] },
+  { id: 'battlepass', label: 'Battle Pass', icon: ic('star'), sub: [['battlepass', 'Battle Pass']] },
+  { id: 'quests', label: 'Quests', icon: ic('scroll'), sub: [['quests', 'Quests']] },
+  { id: 'settings', label: 'Einstellungen', icon: ic('gear'), sub: [['settings', 'Einstellungen'], ['help', 'Steuerung']] },
+  { id: 'cheats', label: 'Cheats', icon: ic('joystick'), sub: [['cheats', 'Cheats']], when: () => profile.cheatsUnlocked },
 ];
 
 class App {
@@ -108,7 +109,7 @@ class App {
     const B = bpInfo();
     const em = playerEmblem(), bn = playerBanner();
     $('#topbar').innerHTML = `<div class="logo">EMBER<span>FALL</span></div><div class="spacer"></div>
-      <div class="chip btn hide-s" data-top="battlepass" title="Battle Pass">★ <span>PASS</span> <b>${B.lvl}</b><span class="xpbar"><i style="width:${(B.maxed ? 100 : B.rest / B.need * 100).toFixed(0)}%"></i></span></div>
+      <div class="chip btn hide-s" data-top="battlepass" title="Battle Pass">${ic('star')} <span>PASS</span> <b>${B.lvl}</b><span class="xpbar"><i style="width:${(B.maxed ? 100 : B.rest / B.need * 100).toFixed(0)}%"></i></span></div>
       <div class="chip btn" data-top="settings" title="Profil & Einstellungen"><span class="emb" style="background:linear-gradient(135deg,${bn.colors[0]},${bn.colors[1]})">${em.icon}</span><span class="nm">${esc(profile.name)}</span></div>
       <div class="chip" title="${L.rest} / ${L.need} XP"><span class="lv">${L.lvl}</span><span class="hide-s">${L.rank}</span><span class="xpbar hide-s"><i style="width:${(L.rest / L.need * 100).toFixed(0)}%"></i></span><small class="hide-s">${L.rest}/${L.need} XP</small></div>
       <div class="chip btn credits" data-top="shop" title="Splitter (Ingame-Währung)">◆ ${profile.credits}</div>`;
@@ -198,7 +199,7 @@ class App {
     const list = MISSIONS.map((x, i) => {
       const un = missionUnlocked(i), done = profile.missions[x.id]?.done;
       return `<div class="card ${i === sel ? 'sel' : ''} ${un ? '' : 'locked'}" data-m="${i}" style="cursor:${un ? 'pointer' : 'default'}">
-        <b>${i + 1}. ${esc(x.name)}</b> ${done ? '<span style="color:#5dff8a">✔ abgeschlossen</span>' : un ? '' : '🔒'}
+        <b>${i + 1}. ${esc(x.name)}</b> ${done ? `<span style="color:#5dff8a">${ic('check')} abgeschlossen</span>` : un ? '' : ic('lock')}
         <div class="dim">${esc(MAPS[x.map].name)} · Belohnung ${x.reward} ◆</div></div>`;
     }).join('');
     const menu = this.menu(`<button class="back small" data-go="home">← Zurück</button><h2>Story-Kampagne</h2>${list}
@@ -260,8 +261,8 @@ class App {
         html = `<h2 style="color:#5dff8a">Mission erfüllt: ${esc(r.mission.name)}</h2>
           <p>Belohnung: <b>${r.reward} ◆</b>${bonus ? ` + Erstabschluss-Bonus <b>${bonus} ◆</b>` : ''} · <b>${r.xp} XP</b></p>
           <p class="dim">Kills: ${st.kills} · Kopfschüsse: ${st.heads} · Kill-Splitter: ${st.credits} ◆ · Tode: ${st.deaths}</p>
-          ${firstTime && unlocked.length ? `<p>🪖 Neue Ausrüstung freigeschaltet: <b>${unlocked.map(esc).join(', ')}</b> – im Menü „Charakter“ anlegen!</p>` : ''}
-          ${r.mission.id === 'm5' ? '<p>Der Glutkern ist erloschen. Rostzahn ist besiegt – Rostbucht ist frei! Danke, Rekrut. 🎖</p>' : ''}`;
+          ${firstTime && unlocked.length ? `<p>${ic('helmet')} Neue Ausrüstung freigeschaltet: <b>${unlocked.map(esc).join(', ')}</b> – im Menü „Charakter“ anlegen!</p>` : ''}
+          ${r.mission.id === 'm5' ? '<p>Der Glutkern ist erloschen. Rostzahn ist besiegt – Rostbucht ist frei! Danke, Rekrut. ' + ic('medal') + '</p>' : ''}`;
       } else {
         addXP(r.xp);
         html = `<h2 style="color:#ff6a4a">Mission gescheitert</h2><p>${esc(r.reason || '')}</p><p class="dim">Kills: ${st.kills} · Splitter aus Kills behältst du: ${st.credits} ◆</p>`;
@@ -274,7 +275,7 @@ class App {
       addXP(150 + r.stats.kills * 30 + (win ? 300 : 0));
       track('pvpPlayed');
       if (win) { track('pvpWin'); profile.stats.pvpWins++; save(); }
-      html = `<h2>${win ? '🏆 Sieg!' : 'Match beendet'}</h2><p>Du bist Platz <b>${me + 1}</b> von ${r.ranking.length}. Belohnung: <b>${reward} ◆</b> (+ Kill-Splitter)</p>
+      html = `<h2>${win ? ic('trophy') + ' Sieg!' : 'Match beendet'}</h2><p>Du bist Platz <b>${me + 1}</b> von ${r.ranking.length}. Belohnung: <b>${reward} ◆</b> (+ Kill-Splitter)</p>
         <table><tr><th>#</th><th>Spieler</th><th>Kills</th><th>Tode</th></tr>${r.ranking.map((p, i) => `<tr style="${p.id === r.myId ? 'color:#ffd23a' : ''}"><td>${i + 1}</td><td>${esc(p.name)}</td><td>${p.kills}</td><td>${p.deaths}</td></tr>`).join('')}</table>`;
     } else if (r.type === 'br') {
       const mine = r.ranking?.find(p => p.id === r.myId);
@@ -286,7 +287,7 @@ class App {
       addXP(100 + r.stats.kills * 40 + (win ? 400 : 0));
       track('brPlayed');
       if (win) track('brWin');
-      html = `<h2>${win ? '🏆 Letzter Überlebender!' : 'Battle Royale beendet'}</h2>
+      html = `<h2>${win ? ic('trophy') + ' Letzter Überlebender!' : 'Battle Royale beendet'}</h2>
         <p>Platz <b>${place < 99 ? place : '–'}</b> von ${total} · Kills: ${r.stats.kills} · Belohnung: <b>${reward} ◆</b> (+ Kill-Splitter)</p>
         ${r.ranking ? `<table><tr><th>Platz</th><th>Spieler</th><th>Kills</th></tr>${r.ranking.map(p => `<tr style="${p.id === r.myId ? 'color:#ffd23a' : ''}"><td>${p.place < 99 ? p.place : '–'}</td><td>${esc(p.name)}</td><td>${p.kills}</td></tr>`).join('')}</table>` : '<p class="dim">Du hast die Runde vorzeitig verlassen.</p>'}`;
     } else if (r.type === 'error') {
@@ -337,7 +338,7 @@ class App {
     this.inLobby = true; this.inRoom = false;
     const host = location.host;
     const list = rooms.length ? rooms.map(r => `<div class="card row" style="justify-content:space-between">
-        <div><b>${esc(r.name)}</b> <span class="dim">${r.mode === 'br' ? '🪂 Battle Royale · ' + esc(MAPS[r.map]?.name || '') : r.mode === 'pvp' ? '⚔ PvP · ' + esc(MAPS[r.map]?.name || '') : '🤝 Koop · ' + esc(MISSIONS.find(m => m.id === r.mission)?.name || '')}</span>
+        <div><b>${esc(r.name)}</b> <span class="dim">${r.mode === 'br' ? ic('parachute') + ' Battle Royale · ' + esc(MAPS[r.map]?.name || '') : r.mode === 'pvp' ? ic('swords') + ' PvP · ' + esc(MAPS[r.map]?.name || '') : ic('users') + ' Koop · ' + esc(MISSIONS.find(m => m.id === r.mission)?.name || '')}</span>
         <div class="dim">${r.players.map(p => esc(p.name)).join(', ')} ${r.started ? '· läuft' : ''}</div></div>
         <button class="small primary" data-join="${r.id}">Beitreten</button></div>`).join('') : '<p class="dim">Noch keine Räume. Erstelle einen!</p>';
     const unlocked = MISSIONS.filter((m, i) => missionUnlocked(i));
@@ -345,10 +346,10 @@ class App {
       <div class="card"><b>Freunde einladen:</b> Sie öffnen im Browser <b style="color:#ffd23a">http://${esc(host.startsWith('localhost') ? '&lt;deine-LAN-IP&gt;:' + (location.port || 80) : host)}</b>
       <div class="dim">Die LAN-IP steht im Server-Fenster (z. B. http://192.168.1.23:3000).</div></div>
       <h3>Offene Räume</h3>${list}
-      <div class="row"><button class="small" id="refresh">↻ Aktualisieren</button></div>
+      <div class="row"><button class="small" id="refresh">${ic('refresh')} Aktualisieren</button></div>
       <h3 style="margin-top:16px">Neuen Raum erstellen</h3>
       <div class="card">
-        <div class="row">Modus: <select id="cmode"><option value="pvp">⚔ LAN-PvP (Jeder gegen jeden)</option><option value="br">🪂 Battle Royale (Letzter gewinnt)</option><option value="coop">🤝 Koop-Story</option></select></div>
+        <div class="row">Modus: <select id="cmode"><option value="pvp">LAN-PvP (Jeder gegen jeden)</option><option value="br">Battle Royale (Letzter gewinnt)</option><option value="coop">Koop-Story</option></select></div>
         <div class="row" id="cmaprow" style="margin-top:8px">Map: <select id="cmap">${Object.values(MAPS).map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select></div>
         <div class="row" id="cmisrow" style="margin-top:8px;display:none">Mission: <select id="cmis">${unlocked.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select></div>
         <div class="row" style="margin-top:10px"><button class="primary" id="create">Raum erstellen</button></div>
@@ -368,12 +369,12 @@ class App {
     const mis = MISSIONS.find(x => x.id === r.mission);
     const unlocked = MISSIONS.filter((x, i) => missionUnlocked(i));
     this.menu(`<h2>${esc(r.name)}</h2>
-      <p>${r.mode === 'br' ? `🪂 Battle Royale · Map: <b>${esc(MAPS[r.map].name)}</b> · Fallschirmsprung, Waffen am Boden aufsammeln (E), die blaue Zone schrumpft – der Letzte gewinnt` : r.mode === 'pvp' ? `⚔ LAN-PvP · Map: <b>${esc(MAPS[r.map].name)}</b> · 20 Kills oder 5 Minuten` : `🤝 Koop-Mission: <b>${esc(mis.name)}</b> · Gegner werden beim Host berechnet`}</p>
+      <p>${r.mode === 'br' ? `${ic('parachute')} Battle Royale · Map: <b>${esc(MAPS[r.map].name)}</b> · Fallschirmsprung, Waffen am Boden aufsammeln (E), die blaue Zone schrumpft – der Letzte gewinnt` : r.mode === 'pvp' ? `${ic('swords')} LAN-PvP · Map: <b>${esc(MAPS[r.map].name)}</b> · 20 Kills oder 5 Minuten` : `${ic('users')} Koop-Mission: <b>${esc(mis.name)}</b> · Gegner werden beim Host berechnet`}</p>
       ${isHost && !r.started ? (r.mode !== 'coop'
         ? `<div class="row">Map ändern: <select id="rmap">${Object.values(MAPS).map(x => `<option ${x.id === r.map ? 'selected' : ''} value="${x.id}">${esc(x.name)}</option>`).join('')}</select></div>`
         : `<div class="row">Mission ändern: <select id="rmis">${unlocked.map(x => `<option ${x.id === r.mission ? 'selected' : ''} value="${x.id}">${esc(x.name)}</option>`).join('')}</select></div>`) : ''}
       <h3 style="margin-top:14px">Spieler (${r.players.length}/8)</h3>
-      ${r.players.map(p => `<div class="card">${p.id === r.host ? '👑 ' : ''}<b>${esc(p.name)}</b>${p.id === net.id ? ' (du)' : ''}</div>`).join('')}
+      ${r.players.map(p => `<div class="card">${p.id === r.host ? ic('crown') + ' ' : ''}<b>${esc(p.name)}</b>${p.id === net.id ? ' (du)' : ''}</div>`).join('')}
       <div class="row" style="margin-top:12px">
         ${isHost ? `<button class="primary" id="rstart" ${r.started ? 'disabled' : ''}>${r.started ? 'Läuft …' : 'Runde starten'}</button>` : `<span class="dim">${r.started ? 'Runde läuft – du steigst gleich ein.' : 'Warte, bis der Host startet …'}</span>`}
         <button id="rleave">Raum verlassen</button>
@@ -406,7 +407,7 @@ class App {
     const skinKeys = [...profile.skins, ...profile.customSkins.map(c => 'custom:' + c.id)];
     const cur = profile.weaponSkin[selId] || 'werk';
     const m = this.menu(`<button class="back small" data-go="home">← Zurück</button><h2>Waffenschmiede</h2>
-      <div class="row">${owned.map(w => `<button class="small ${w.id === selId ? 'primary' : ''}" data-w="${w.id}">${esc(w.name)}${profile.loadout[w.slot] === w.id ? ' ★' : ''}</button>`).join('')}</div>
+      <div class="row">${owned.map(w => `<button class="small ${w.id === selId ? 'primary' : ''}" data-w="${w.id}">${esc(w.name)}${profile.loadout[w.slot] === w.id ? ' ' + ic('star') : ''}</button>`).join('')}</div>
       <div class="card" style="margin-top:10px"><h3>${esc(def.name)} <span class="dim">${def.clsName} · ${def.slot === 'primary' ? 'Primärwaffe' : 'Sekundärwaffe'}</span></h3>
         <p class="dim">${esc(def.desc)}</p>
         ${bar('Schaden', dps / 130, Math.round(dps))}
@@ -453,7 +454,7 @@ class App {
         <div class="row" style="margin-top:8px">Muster <select id="skp">${Object.entries(PATTERNS).map(([k, v]) => `<option value="${k}" ${k === s.pattern ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
         <div class="row" style="margin-top:8px">Größe <input type="range" id="sks" min="0.5" max="2.5" step="0.1" value="${s.scale}"></div>
         <div class="row" style="margin-top:8px">Leuchten <input type="range" id="skg" min="0" max="1" step="0.05" value="${s.glow}"></div>
-        <div class="row" style="margin-top:8px"><button id="skr" class="small">🎲 Zufall</button></div>
+        <div class="row" style="margin-top:8px"><button id="skr" class="small">${ic('dice')} Zufall</button></div>
       </div></div>
       <div class="row" style="margin-top:14px"><button class="primary" id="sksave">${edit ? 'Änderungen speichern' : 'Skin speichern'}</button>
       <span class="dim">Vorschau rechts auf deiner Primärwaffe.</span></div>
@@ -517,7 +518,7 @@ class App {
     }
     const m = this.menu(`<button class="back small" data-go="home">← Zurück</button><h2>Shop</h2>
       <p class="dim">Bezahlt wird nur mit Splittern ◆ aus Missionen, Quests und Matches.</p>
-      <div class="tabs"><button class="small ${tab === 'weapons' ? 'on' : ''}" id="tw">Waffen</button><button class="small ${tab === 'att' ? 'on' : ''}" id="ta">Aufsätze</button><button class="small ${tab === 'outfit' ? 'on' : ''}" id="to">Ausrüstung</button><button class="small ${tab === 'codes' ? 'on' : ''}" id="tc">🔑 Codes</button><button class="small" data-go="cases">Kisten →</button></div>${items}`);
+      <div class="tabs"><button class="small ${tab === 'weapons' ? 'on' : ''}" id="tw">Waffen</button><button class="small ${tab === 'att' ? 'on' : ''}" id="ta">Aufsätze</button><button class="small ${tab === 'outfit' ? 'on' : ''}" id="to">Ausrüstung</button><button class="small ${tab === 'codes' ? 'on' : ''}" id="tc">${ic('key')} Codes</button><button class="small" data-go="cases">Kisten →</button></div>${items}`);
     $('#tw').onclick = () => this.shop('weapons');
     $('#ta').onclick = () => this.shop('att');
     $('#to').onclick = () => this.shop('outfit');
@@ -629,7 +630,7 @@ class App {
       const st = questState(q);
       const done = st.p >= q.goal;
       return `<div class="card"><div class="row" style="justify-content:space-between"><div><b>${esc(q.name)}</b> <span class="dim">· ${q.reward} ◆</span><div class="dim">${esc(q.desc)}</div></div>
-        ${st.claimed ? '<span style="color:#5dff8a">✔ Abgeholt</span>' : `<button class="small ${done ? 'primary' : ''}" data-claim="${q.id}" ${done ? '' : 'disabled'}>${done ? 'Abholen' : st.p + '/' + q.goal}</button>`}</div>
+        ${st.claimed ? `<span style="color:#5dff8a">${ic('check')} Abgeholt</span>` : `<button class="small ${done ? 'primary' : ''}" data-claim="${q.id}" ${done ? '' : 'disabled'}>${done ? 'Abholen' : st.p + '/' + q.goal}</button>`}</div>
         <div class="prog"><i style="width:${Math.min(100, st.p / q.goal * 100)}%"></i></div></div>`;
     };
     const m = this.menu(`<button class="back small" data-go="home">← Zurück</button><h2>Quests</h2>
