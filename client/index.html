@@ -122,6 +122,19 @@
   #scoreboard { position: absolute; top: 20%; left: 50%; transform: translateX(-50%); background: rgba(10,14,24,.9); padding: 20px 26px; border-radius: 14px; display: none; min-width: 380px; }
   #fps { position: absolute; left: 10px; top: 8px; font-size: 12px; color: #9fa; font-weight: 400; }
   #hint { position: absolute; bottom: 70px; left: 50%; transform: translateX(-50%); font-size: 13px; color: #dde; font-weight: 400; background: rgba(0,0,0,.4); padding: 6px 12px; border-radius: 8px; transition: opacity 1s; text-align: center; max-width: 90vw; }
+  /* Zwischensequenzen */
+  #cine { position: fixed; inset: 0; z-index: 8; pointer-events: none; display: none; }
+  #cine .bar { position: absolute; left: 0; right: 0; height: 0; background: #000; transition: height .5s ease; }
+  #cine .bar.top { top: 0; } #cine .bar.bottom { bottom: 0; }
+  #cine.on .bar { height: 11vh; }
+  #cine .title { position: absolute; left: 7vw; top: 20vh; opacity: 0; text-shadow: 0 2px 8px #000; }
+  #cine .title small { display: block; letter-spacing: 6px; color: var(--acc2); font-size: 15px; font-weight: 800; }
+  #cine .title b { display: block; font-size: clamp(30px, 5vw, 64px); font-weight: 900; letter-spacing: 3px; }
+  #cine .title span { display: block; font-family: Consolas, monospace; color: #cfe; font-size: 17px; margin-top: 6px; min-height: 22px; }
+  #cine .sub { position: absolute; left: 50%; bottom: 14vh; transform: translateX(-50%); width: min(820px, 88vw); text-align: center; opacity: 0; transition: opacity .3s; text-shadow: 0 2px 4px #000; }
+  #cine .sub i { display: block; font-style: normal; font-weight: 800; font-size: 14px; letter-spacing: 1px; margin-bottom: 4px; }
+  #cine .sub p { margin: 0; font-size: clamp(16px, 2vw, 22px); line-height: 1.4; }
+  #cine .skip { position: absolute; right: 2.5vw; bottom: 3vh; color: #889; font-size: 13px; z-index: 2; }
   #pause { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(5,8,15,.6); z-index: 10; }
   #pause .box { background: var(--bg); border: 1px solid var(--line); border-radius: 18px; padding: 28px; width: 440px; max-width: 94vw; max-height: 94vh; overflow: auto; display: flex; flex-direction: column; gap: 10px; text-align: center; }
   #toast { position: fixed; top: 66px; right: 22px; z-index: 30; display: flex; flex-direction: column; gap: 8px; align-items: flex-end; pointer-events: none; }
@@ -144,6 +157,7 @@
     <button id="quit">Runde verlassen</button>
     <p class="dim" id="pausenote"></p>
   </div></div>
+  <div id="cine"></div>
   <div id="modal"></div>
   <div id="toast"></div>
   <script type="module" src="/js/main.js"></script>

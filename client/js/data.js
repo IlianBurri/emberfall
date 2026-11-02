@@ -204,21 +204,30 @@ export const MAPS = {
 };
 
 // ---------------------------------------------------------------- Story
-// Ziele: kill {count}, reach {poi}, collect {pois}, destroy {pois, hp}, defend {poi, time}, boss {}
-// Gegnerspawns: {type, n, at: 'spawn'|'near'|poi-Index}
+// Ziele: kill {count}, reach {poi}, collect {pois, hold?}, destroy {pois, hp}, defend {poi, time, waves},
+//        hold {poi, time, waves} (Stellung/Funkgerät halten), rescue {poi} (Geisel befreien), escort {poi} (Geisel hinbringen), boss {}
+// poi: Zahl = Platz in der Stadt, Text = Ort im Umland ('farm', 'funk', 'tanke', 'tanklager', 'depot', 'weiler')
+// Gegnerspawns: {type, n, at: 'spread'|'near'|poi}
+// intro/outro: Zwischensequenzen [Sprecher, Text]; card = Titelkarte (Ort, Uhrzeit)
+export const SPEAKERS = { vogt: 'Major Vogt', echo: 'Echo (Funk)', rost: 'Kommandant Rostzahn', kessler: 'Bauer Kessler', jonas: 'Jonas Kessler' };
 export const MISSIONS = [
   {
-    id: 'm1', name: 'Erstkontakt', map: 'hafen', reward: 300, xp: 400,
-    brief: 'Das Rost-Syndikat hat den Hafen von Rostbucht besetzt und schmuggelt Teile für eine geheimnisvolle Maschine – den „Glutkern“. Säubere den Hafen und sichere den Funkturm, damit Kommando Morgenrot Kontakt halten kann.',
-    radio: ['Funk: Hier Kommando Morgenrot. Willkommen im Einsatz, Rekrut.', 'Funk: Das Syndikat hat Wachen im ganzen Hafen. Halt die Augen offen.'],
+    id: 'm1', name: 'Erstkontakt', map: 'hafen', reward: 300, xp: 400, card: { place: 'Rostbucht-Hafen', time: '06:10' },
+    brief: 'Das Rost-Syndikat hat den Hafen von Rostbucht besetzt und schmuggelt Teile für eine geheimnisvolle Maschine – den „Glutkern“. Säubere den Hafen, sichere den Funkturm und richte das Funkgerät ein.',
+    intro: [['vogt', 'Rekrut, hier spricht Major Vogt, Kommando Morgenrot. Willkommen in Rostbucht.'], ['vogt', 'Seit drei Tagen hält das Rost-Syndikat den Hafen. Nachts entladen sie Kisten ohne Papiere.'], ['echo', 'Echo hier. Ohne den Funkturm sind wir blind. Säubere den Hafen und richte das Funkgerät ein.'], ['vogt', 'Leise rein, laut raus. Viel Glück, Soldat.']],
+    outro: [['echo', 'Verbindung steht! Gute Arbeit.'], ['echo', 'Und Rekrut … auf allen Kisten ist dasselbe Zeichen: ein glühender Kern.']],
+    radio: ['Funk: Das Syndikat hat Wachen im ganzen Hafen. Halt die Augen offen.'],
     objectives: [
       { type: 'kill', count: 8, text: 'Eliminiere Syndikat-Wachen', spawn: [{ type: 'rekrut', n: 8, at: 'spread' }] },
       { type: 'reach', poi: 3, text: 'Erreiche den Funkturm', radio: 'Funk: Gut gemacht! Jetzt ab zum Funkturm.', spawn: [{ type: 'rekrut', n: 3, at: 3 }, { type: 'stuermer', n: 1, at: 3 }] },
+      { type: 'hold', poi: 3, time: 15, text: 'Richte das Funkgerät ein', radio: 'Echo: Bleib am Gerät, ich brauche fünfzehn Sekunden!', waves: [{ t: 3, type: 'rekrut', n: 3 }, { t: 9, type: 'stuermer', n: 2 }] },
     ],
   },
   {
-    id: 'm2', name: 'Funkstille', map: 'wueste', reward: 450, xp: 550,
+    id: 'm2', name: 'Funkstille', map: 'wueste', reward: 450, xp: 550, card: { place: 'Dorf Sandkorn', time: '13:40' },
     brief: 'Im Dorf Sandkorn stören Sender des Syndikats unseren Funk. Außerdem lagern dort Datenkerne mit Bauplänen des Glutkerns. Hol die Daten und schalte die Störsender aus.',
+    intro: [['vogt', 'Die Spur der Kisten führt nach Sandkorn.'], ['echo', 'Dort blockieren Störsender jeden Funk. Und das Syndikat versteckt Datenkerne mit Bauplänen.'], ['vogt', 'Hol die Daten, schalte die Sender aus. Wir müssen wissen, was sie bauen.']],
+    outro: [['echo', 'Die Daten sind entschlüsselt … es ist ein Reaktor. Sie nennen ihn „Glutkern“.'], ['vogt', 'Und ein Name taucht immer wieder auf: Kommandant Rostzahn.']],
     radio: ['Funk: Die Störsender blinken rot – schieß sie einfach kaputt.'],
     objectives: [
       { type: 'collect', pois: [1, 4, 6], text: 'Sammle Datenkerne', spawn: [{ type: 'rekrut', n: 7, at: 'spread' }, { type: 'stuermer', n: 3, at: 'spread' }] },
@@ -227,8 +236,10 @@ export const MISSIONS = [
     ],
   },
   {
-    id: 'm3', name: 'Halte die Linie', map: 'schnee', reward: 600, xp: 700,
+    id: 'm3', name: 'Halte die Linie', map: 'schnee', reward: 600, xp: 700, card: { place: 'Station Frostzahn', time: '22:15' },
     brief: 'Station Frostzahn ist unser letzter Außenposten im Norden. Das Syndikat greift in Wellen an. Halte die Funkbaracke, bis die Verstärkung eintrifft.',
+    intro: [['vogt', 'Das Syndikat hat gemerkt, dass wir ihre Pläne haben.'], ['vogt', 'Station Frostzahn ist unser einziger Außenposten im Norden. Sie greifen in Wellen an.'], ['echo', 'Die Verstärkung braucht neunzig Sekunden. Halte die Funkbaracke – um jeden Preis.']],
+    outro: [['vogt', 'Die Station steht. Gut gemacht.'], ['vogt', 'Aber unter den Angreifern waren Söldner aus Sandkorn. Sie haben die Familie vom Kessler-Hof verschleppt.']],
     radio: ['Funk: Sie kommen aus allen Richtungen. Bleib in der Zone!'],
     objectives: [
       { type: 'reach', poi: 3, text: 'Begib dich zur Funkbaracke', spawn: [{ type: 'rekrut', n: 3, at: 'spread' }] },
@@ -237,8 +248,22 @@ export const MISSIONS = [
     ],
   },
   {
-    id: 'm4', name: 'Schattenkonvoi', map: 'nacht', reward: 750, xp: 850,
-    brief: 'Nachts verlädt das Syndikat den Glutkern-Zünder auf einen Konvoi. Scharfschützen sichern die Dächer. Schalte sie aus und markiere die Fracht.',
+    id: 'm6', name: 'Geiseln am Hof', map: 'wueste', reward: 650, xp: 750, card: { place: 'Kessler-Hof bei Sandkorn', time: '05:50' },
+    brief: 'Das Syndikat hält Jonas Kessler auf dem Hof seiner Familie fest. Befreie ihn und bring ihn zur Tankstelle im Westen, wo die Abholung wartet.',
+    intro: [['echo', 'Ein Notruf vom Kessler-Hof außerhalb von Sandkorn.'], ['kessler', '… sie haben meinen Sohn … sie wollen unser Wasser für ihren Kern …'], ['vogt', 'Finde den Jungen und bring ihn zur Tankstelle an der Westseite. Wir holen euch dort ab.'], ['echo', 'Pass auf ihn auf. Er ist kein Soldat.']],
+    outro: [['jonas', 'Danke … Sie bringen das Kühlwasser zum Hafen. Heute Nacht. Mit einem Konvoi.'], ['vogt', 'Dann sind wir heute Nacht auch dort.']],
+    radio: ['Echo: Der Hof liegt im Osten außerhalb der Stadtmauer.'],
+    objectives: [
+      { type: 'reach', poi: 'farm', text: 'Erreiche den Kessler-Hof', spawn: [{ type: 'rekrut', n: 4, at: 'farm' }, { type: 'stuermer', n: 2, at: 'farm' }, { type: 'rekrut', n: 3, at: 'spread' }] },
+      { type: 'rescue', poi: 'farm', text: 'Befreie Jonas Kessler', radio: 'Echo: Da ist er! Bleib kurz bei ihm, ich löse die Fesseln über dein Werkzeug.', spawn: [{ type: 'rekrut', n: 3, at: 'near' }] },
+      { type: 'escort', poi: 'tanke', text: 'Bring Jonas zur Tankstelle', radio: 'Vogt: Er folgt dir. Halt ihm den Rücken frei!', spawn: [{ type: 'stuermer', n: 3, at: 'near' }, { type: 'rekrut', n: 4, at: 'tanke' }] },
+    ],
+  },
+  {
+    id: 'm4', name: 'Schattenkonvoi', map: 'nacht', reward: 750, xp: 850, card: { place: 'Rostbucht-Hafen', time: '23:50' },
+    brief: 'Nachts verlädt das Syndikat Kühlwasser und den Glutkern-Zünder auf einen Konvoi. Scharfschützen sichern die Dächer. Schalte sie aus und sabotiere den Konvoi.',
+    intro: [['vogt', 'Der Junge hatte recht. Ein Konvoi verlädt Kühlwasser – und vielleicht den Zünder für den Glutkern.'], ['echo', 'Scharfschützen auf den Dächern. Achte auf rote Laser!'], ['vogt', 'Schalte die Schützen aus, sabotiere den Generator und verschwinde.']],
+    outro: [['echo', 'Generator zerstört, der Konvoi steht.'], ['echo', 'Aber der Zünder war nicht an Bord … er ist schon im Glutkern-Werk.']],
     radio: ['Funk: Achte auf rote Laserpunkte – das sind Scharfschützen!'],
     objectives: [
       { type: 'kill', count: 4, only: 'schuetze', text: 'Schalte die Scharfschützen aus', spawn: [{ type: 'schuetze', n: 4, at: 'spread' }, { type: 'rekrut', n: 6, at: 'spread' }] },
@@ -247,8 +272,33 @@ export const MISSIONS = [
     ],
   },
   {
-    id: 'm5', name: 'Glutkern', map: 'industrie', reward: 1200, xp: 1200,
+    id: 'm7', name: 'Funkhügel', map: 'industrie', reward: 800, xp: 900, card: { place: 'Funkhügel vor dem Glutkern-Werk', time: '16:20' },
+    brief: 'Das Glutkern-Werk ist eine Festung. Baue auf dem Funkhügel einen Uplink für die Luftaufklärung auf und lege danach das Tanklager mit dem Kühlwasser lahm.',
+    intro: [['vogt', 'Das Glutkern-Werk ist eine Festung. Wir brauchen Augen von oben.'], ['echo', 'Auf dem Funkhügel südlich der Stadt steht ein alter Sendemast. Bau dort den Uplink auf, dann sehen wir alles.'], ['vogt', 'Danach legst du ihr Tanklager lahm. Kein Kühlwasser – kein Kern.']],
+    outro: [['echo', 'Uplink steht. Wir sehen ihn, Rekrut – Rostzahn persönlich.'], ['echo', 'Und … er hat Sprengsätze in Station Frostzahn versteckt.']],
+    radio: ['Echo: Der Funkhügel liegt im Süden außerhalb der Mauer.'],
+    objectives: [
+      { type: 'reach', poi: 'funk', text: 'Erreiche den Funkhügel', spawn: [{ type: 'rekrut', n: 4, at: 'funk' }, { type: 'schuetze', n: 1, at: 'spread' }, { type: 'rekrut', n: 3, at: 'spread' }] },
+      { type: 'hold', poi: 'funk', time: 30, text: 'Halte den Uplink am Sendemast', radio: 'Echo: Upload läuft – halt die Stellung!', waves: [{ t: 2, type: 'rekrut', n: 3 }, { t: 10, type: 'stuermer', n: 3 }, { t: 18, type: 'brocken', n: 1 }, { t: 22, type: 'rekrut', n: 3 }] },
+      { type: 'destroy', pois: ['tanklager'], hp: 450, text: 'Zerstöre die Kühlwasser-Pumpe im Tanklager', radio: 'Vogt: Jetzt das Tanklager!', spawn: [{ type: 'rekrut', n: 4, at: 'tanklager' }, { type: 'stuermer', n: 2, at: 'tanklager' }] },
+    ],
+  },
+  {
+    id: 'm8', name: 'Letzte Warnung', map: 'schnee', reward: 900, xp: 1000, card: { place: 'Station Frostzahn', time: '07:30' },
+    brief: 'Rostzahn hat drei Sprengsätze in Station Frostzahn versteckt. Entschärfe sie, bevor der Zünder abläuft.',
+    intro: [['rost', 'Morgenrot! Ihr wollt meinen Kern? Dann rettet erst eure kleine Station.'], ['echo', 'Drei Sprengsätze in Frostzahn – und der Zünder läuft!'], ['vogt', 'Entschärfe sie, schnell. Jede Sekunde zählt.']],
+    outro: [['vogt', 'Alle drei entschärft. Rostzahn hat kein Druckmittel mehr.'], ['vogt', 'Es ist Zeit, das zu beenden. Wir greifen das Werk im Morgengrauen an.']],
+    radio: ['Echo: Stell dich direkt an eine Bombe, um sie zu entschärfen.'],
+    objectives: [
+      { type: 'collect', bombs: true, hold: 4, pois: [2, 4, 5], timer: 170, text: 'Entschärfe die Sprengsätze', spawn: [{ type: 'rekrut', n: 6, at: 'spread' }, { type: 'stuermer', n: 3, at: 'spread' }, { type: 'schuetze', n: 2, at: 'spread' }] },
+      { type: 'kill', count: 0, text: 'Säubere die Station', remaining: true, radio: 'Echo: Alle Bomben sicher! Erledige den Rest.' },
+    ],
+  },
+  {
+    id: 'm5', name: 'Glutkern', map: 'industrie', reward: 1200, xp: 1200, card: { place: 'Glutkern-Werk', time: '04:00' },
     brief: 'Im Glutkern-Werk baut Kommandant Rostzahn die Maschine zusammen. Zerstöre die drei Kühlpumpen, damit der Kern instabil wird – und stell dich Rostzahn persönlich.',
+    intro: [['vogt', 'Das ist es. Das Glutkern-Werk.'], ['echo', 'Drei Kühlpumpen halten den Kern stabil. Zerstöre sie, dann hat Rostzahn nichts mehr.'], ['rost', 'Ich habe auf dich gewartet, Rekrut.'], ['vogt', 'Bring ihn zur Strecke. Wir zählen auf dich.']],
+    outro: [['echo', 'Der Kern erlischt … ihr habt es geschafft!'], ['vogt', 'Rostbucht ist frei. Kommando Morgenrot dankt dir, Soldat.'], ['echo', 'Ende.']],
     radio: ['Funk: Das ist es, Rekrut. Alles oder nichts.'],
     objectives: [
       { type: 'destroy', pois: [1, 4, 6], hp: 300, text: 'Zerstöre die Kühlpumpen', spawn: [{ type: 'rekrut', n: 8, at: 'spread' }, { type: 'stuermer', n: 3, at: 'spread' }, { type: 'brocken', n: 2, at: 'spread' }, { type: 'schuetze', n: 2, at: 'spread' }] },
@@ -282,7 +332,7 @@ export const QUESTS = [
   { id: 'q_case', name: 'Sammler', desc: 'Öffne 3 Waffenkisten.', event: 'case', goal: 3, reward: 300 },
   { id: 'q_skin', name: 'Künstler', desc: 'Erstelle einen eigenen Skin im Editor.', event: 'skin', goal: 1, reward: 150 },
   { id: 'q_boss', name: 'Rostzahn gefallen', desc: 'Besiege Kommandant Rostzahn.', event: 'kill', match: { boss: true }, goal: 1, reward: 800 },
-  { id: 'q_story', name: 'Glutkern erloschen', desc: 'Schließe alle 5 Story-Missionen ab.', event: 'storyDone', goal: 5, reward: 2000 },
+  { id: 'q_story', name: 'Glutkern erloschen', desc: 'Schließe alle 8 Story-Missionen ab.', event: 'storyDone', goal: 8, reward: 2500 },
 ];
 
 // Tagesaufträge: aus diesen Vorlagen werden täglich 3 gezogen

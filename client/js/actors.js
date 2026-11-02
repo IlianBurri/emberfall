@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { ENEMY_TYPES } from './data.js';
 import { buildGunModel } from './weapon.js';
 import { Baker, capsule } from './geom.js';
+import { charactersReady, createCharacter, animateCharacter, characterDie } from './characters.js';
 
 const soldierMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0.0 });
 function shade(hex, f) { const c = new THREE.Color(hex); c.multiplyScalar(f); return '#' + c.getHexString(); }
@@ -126,6 +127,11 @@ export function bakedGunGeometry(id, build = {}) {
 }
 
 export function makeSoldier(color, opts = {}) {
+  // Animiertes 3D-Modell (Spieler: Soldat, Gegner: SWAT), sonst eigener prozeduraler Soldat
+  if (charactersReady() && !opts.procedural) {
+    const kind = 'swat'; // realistischer Einsatzsoldat für alle; Fraktion über Farben und Visier
+    return createCharacter(kind, { ...opts, color, skin: opts.skin || '#c89a74' }, id => new THREE.Mesh(bakedGunGeometry(id), soldierMat));
+  }
   const o = {
     color, gun: opts.gun || 'falke', vest: opts.vest || '#3d3c34', skin: opts.skin || '#d9a877', eye: opts.eye || '#2ae0ff',
     helmet: opts.helmet || shade(color, 0.6), mask: opts.mask || false, boss: !!opts.boss, pack: opts.pack !== false,
@@ -153,6 +159,7 @@ export function makeSoldier(color, opts = {}) {
 // Waffe einer Figur tauschen (z. B. wenn ein Mitspieler wechselt)
 export function setSoldierGun(g, gunId) {
   const u = g.userData;
+  if (u.gltf) { u.gltf.setWeapon(gunId); return; }
   if (!u.opts || u.opts.gun === gunId) return;
   u.opts = { ...u.opts, gun: gunId };
   u.torso.geometry = soldierGeometries(u.opts).torso;
@@ -160,6 +167,7 @@ export function setSoldierGun(g, gunId) {
 
 export function animateSoldier(g, speed, dt, pitch = 0, crouch = 0) {
   const u = g.userData;
+  if (u.gltf) return animateCharacter(g, speed, dt, pitch, crouch);
   u.phase += dt * Math.max(speed, 0.001) * 2.2;
   u.crouch = (u.crouch || 0) + (crouch - (u.crouch || 0)) * Math.min(1, dt * 10);
   const c = u.crouch;
@@ -243,7 +251,8 @@ export class Enemy {
     this.speedNow = 0;
     this.firing = 0;
     this.stationary = !!opts.stationary;
-    this.model = makeSoldier(this.T.color, enemyLook(type));
+    const look = enemyLook(type);
+    this.model = makeSoldier(look.color, look);
     this.pitch = 0;
     this.model.position.copy(this.pos);
     game.scene.add(this.model);
@@ -309,6 +318,12 @@ export class Enemy {
   update(dt) {
     if (this.dead) {
       this.deadT += dt;
+      if (this.model.userData.gltf) {
+        characterDie(this.model);
+        animateCharacter(this.model, 0, dt);
+        this.model.position.y = this.pos.y - Math.max(0, this.deadT - 2.6) * 0.8;
+        return this.deadT > 4;
+      }
       this.model.rotation.x = Math.max(-Math.PI / 2, -this.deadT * 6);
       this.model.position.y = this.pos.y - Math.max(0, this.deadT - 1.2) * 1.2;
       return this.deadT > 2.4;
@@ -388,6 +403,8 @@ export class Enemy {
     if (this.pos.y > my && this.pos.y - my < 0.6) this.model.position.y = my + (this.pos.y - my) * Math.min(1, dt * 14);
     this.model.rotation.y = this.yaw;
     if (this.state !== 'combat') this.pitch *= 0.9;
+    this.model.userData.firing = this.firing;
+    this.model.userData.combat = this.state === 'combat';
     animateSoldier(this.model, moved, dt, this.pitch);
     return false;
   }
@@ -426,7 +443,7 @@ export { TYPE_LIST };
 const ENEMY_GUN = { rekrut: 'falke', stuermer: 'brecher', schuetze: 'langstreck', brocken: 'donner', boss: 'donner' };
 export function enemyLook(type) {
   const T = ENEMY_TYPES[type];
-  return { scale: T.scale || 1, gun: ENEMY_GUN[type], eye: '#ff3a2a', mask: !T.boss, boss: !!T.boss, vest: T.boss ? '#2a1a14' : '#4a4232', helmet: T.boss ? '#2a2a2a' : '#5a4e3a', pack: type !== 'stuermer' };
+  return { enemy: true, color: T.boss ? '#5a1a12' : shade(T.color, 0.42), scale: T.scale || 1, gun: ENEMY_GUN[type], eye: '#ff3a2a', mask: !T.boss, boss: !!T.boss, vest: T.boss ? '#2a1a14' : '#4a4232', helmet: T.boss ? '#2a2a2a' : '#5a4e3a', pack: type !== 'stuermer' };
 }
 
 // ---------------------------------------------------------------- Puppen (vom Netz gesteuert)

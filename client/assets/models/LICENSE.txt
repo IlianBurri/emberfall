@@ -1,0 +1,8 @@
+3D-Modelle in diesem Ordner
+
+swat.glb – "SWAT" von Quaternius (https://quaternius.com), Quelle: https://poly.pizza/m/Btfn3G5Xv4
+           Wird für alle Figuren (Spieler, Mitspieler, Gegner) genutzt und im Spiel je Outfit/Fraktion eingefärbt.
+
+Lizenz: CC0 1.0 Universal (Public Domain) – https://creativecommons.org/publicdomain/zero/1.0/
+Frei nutzbar, auch kommerziell, ohne Namensnennung. Danke an Quaternius!
+Heruntergeladen am 2026-11-02.

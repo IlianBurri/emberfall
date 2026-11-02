@@ -11,6 +11,8 @@ import { FX } from './fx.js';
 import * as sfx from './audio.js';
 import { net } from './net.js';
 import { BattleRoyale } from './br.js';
+import { animateCharacter, characterDie } from './characters.js';
+import { cinematicMixin } from './cinematic.js';
 
 const DIFF = {
   leicht: { dmg: 0.55, acc: 0.75, hp: 0.8, react: 1.4, reward: 0.75 },
@@ -143,6 +145,8 @@ export class Game {
     this.updateCamera(0);
     this.centerMsg(this.mode === 'pvp' ? 'LAN-PvP – Jeder gegen jeden! 20 Kills gewinnen.'
       : this.mode === 'br' ? (opts.late ? 'Runde läuft schon – du schaust zu.' : 'Battle Royale! Lande, sammle Waffen, überlebe.') : opts.mission.name, 3);
+    // Story: Einsatzbesprechung als Zwischensequenz vor dem Start
+    if (this.mode === 'story' && opts.mission.intro) this.playCinematic('intro');
   }
 
   createWeapon(id, b, magsReserve = 0) {
@@ -437,26 +441,30 @@ export class Game {
       const free = w.sniperSpots.filter(s => !this.enemies.some(e => !e.dead && e.pos.distanceTo(s) < 1) && nearestPlayerD(s) > 25);
       if (free.length) { pos = free[Math.floor(Math.random() * free.length)].clone(); stationary = true; }
     }
-    if (!pos && typeof at === 'number') {
-      const c = w.pois[at];
-      const a = Math.random() * Math.PI * 2, r = 1.5 + Math.random() * 2;
-      pos = new THREE.Vector3(c.x + Math.cos(a) * r, 0.2, c.z + Math.sin(a) * r);
+    const poiPos = i => this.mission ? this.mission.poi(i) : w.pois[i];
+    const isPlace = typeof at === 'number' || (typeof at === 'string' && !['spread', 'near', 'wave'].includes(at));
+    if (!pos && isPlace) {
+      const c = poiPos(at);
+      const a = Math.random() * Math.PI * 2, r = 2 + Math.random() * 4;
+      pos = new THREE.Vector3(c.x + Math.cos(a) * r, c.y + 0.2, c.z + Math.sin(a) * r);
     }
     if (!pos) {
       const minD = at === 'spread' ? 30 : 22, maxD = at === 'spread' ? 999 : at === 'near' ? 42 : 55;
-      const ref = at === 'wave' ? w.pois[obj.poi] : null;
-      let cands = w.intersections.filter(it => {
-        const p = tmp.set(it.x, 0, it.z);
+      const ref = at === 'wave' ? poiPos(obj.poi) : null;
+      // Kreuzungen in der Stadt + Punkte im Umland
+      const spots = [...w.intersections.map(it => ({ x: it.x, y: 0, z: it.z })), ...w.outerSpots];
+      let cands = spots.filter(s => {
+        const p = tmp.set(s.x, s.y, s.z);
         const dp = nearestPlayerD(p);
         const dr = ref ? ref.distanceTo(p) : dp;
         return dp > minD && dr < maxD && dr > minD;
       });
-      if (!cands.length) cands = w.intersections;
-      const it = cands[Math.floor(Math.random() * cands.length)];
-      pos = new THREE.Vector3(it.x + (Math.random() - 0.5) * 3, 0, it.z + (Math.random() - 0.5) * 3);
+      if (!cands.length) cands = spots;
+      const s = cands[Math.floor(Math.random() * cands.length)];
+      pos = new THREE.Vector3(s.x + (Math.random() - 0.5) * 3, s.y, s.z + (Math.random() - 0.5) * 3);
       alert = at === 'near' || at === 'wave';
     }
-    const alertPos = at === 'wave' ? w.pois[obj.poi] : players[0].pos;
+    const alertPos = at === 'wave' ? poiPos(obj.poi) : players[0].pos;
     const e = new Enemy(this, type, pos, { alert, alertPos, stationary });
     this.enemies.push(e);
     if (ENEMY_TYPES[type].boss) { this.boss = e; this.h.boss.style.display = 'block'; }
@@ -886,7 +894,8 @@ export class Game {
       const type = TYPE_LIST[ti];
       if (!px) {
         const T = ENEMY_TYPES[type];
-        px = new Puppet(this.scene, T.color, enemyLook(type));
+        const look = enemyLook(type);
+        px = new Puppet(this.scene, look.color, look);
         px.id = id; px.type = type; px.T = T; px.dead = false;
         this.proxies.set(id, px);
         if (T.boss) { this.boss = px; this.h.boss.style.display = 'block'; }
@@ -899,6 +908,14 @@ export class Game {
   }
   updateProxies(dt) {
     for (const [id, px] of this.proxies) {
+      if (px.dead && px.model.userData.gltf) {
+        px.deadT += dt;
+        characterDie(px.model);
+        animateCharacter(px.model, 0, dt);
+        px.model.position.y = px.pos.y - Math.max(0, px.deadT - 2.6) * 0.8;
+        if (px.deadT > 4) { px.remove(); this.proxies.delete(id); }
+        continue;
+      }
       if (px.dead) {
         px.deadT += dt;
         px.model.rotation.x = Math.max(-Math.PI / 2, -px.deadT * 6);
@@ -933,6 +950,7 @@ export class Game {
     this.frame = (this.frame || 0) + 1;
     this.time += dt;
     const pauseSim = this.paused && this.mode === 'story';
+    if (this.cine) { if (!pauseSim) this.updateCinematic(dt); return; }
     if (!pauseSim) {
       this.updatePlayer(dt);
       this.aimbot(dt);
@@ -1235,6 +1253,7 @@ export class Game {
     const r = this.app.renderer;
     r.autoClear = true;
     r.render(this.scene, this.camera);
+    if (this.cine) return; // Zwischensequenz: keine Ego-Waffe
     if (activeCheats().wallhack) {
       r.autoClear = false;
       const bg = this.scene.background, fog = this.scene.fog;
@@ -1258,7 +1277,10 @@ export class Game {
     const mult = this.diff.reward * (this.mode === 'coop' ? 1.2 : 1);
     const reward = Math.round(def.reward * mult), xp = Math.round(def.xp * mult + this.stats.kills * 20);
     sfx.sfxUI('win');
-    this.finish({ type: 'mission', success: true, mission: def, reward, xp, stats: this.stats, coop: this.mode === 'coop' });
+    const done = () => this.finish({ type: 'mission', success: true, mission: def, reward, xp, stats: this.stats, coop: this.mode === 'coop' });
+    // Story: kurzer Abspann, danach Ergebnis
+    if (this.mode === 'story' && def.outro && !this.cine) { this.input.fire = false; this.playCinematic('outro', done); }
+    else done();
   }
   missionFailed(reason) {
     if (this.ended) return;
@@ -1278,6 +1300,7 @@ export class Game {
   }
   finish(result) {
     if (this.ended) return;
+    if (this.cine) { this.cine.onEnd = null; this.endCinematic(); }
     this.ended = true;
     this.unbindInput();
     this.netOffs?.forEach(off => off());
@@ -1306,3 +1329,5 @@ function r2(v) { return Math.round(v * 100) / 100; }
 function easeInOut(t) { return t * t * (3 - 2 * t); }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 function clsShort(c) { return { ar: 'Sturmgewehr', smg: 'MP', dmr: 'DMR', shotgun: 'Schrot', lmg: 'LMG', sniper: 'Sniper', pistol: 'Pistole', grenade: 'Granate' }[c] || c; }
+
+Object.assign(Game.prototype, cinematicMixin);

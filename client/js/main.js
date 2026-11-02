@@ -13,6 +13,7 @@ import * as sfx from './audio.js';
 import { characterMenus, cheatPanel, charCase } from './charmenu.js';
 import { lookFromProfile } from './profile.js';
 import { animateSoldier } from './actors.js';
+import { loadCharacters } from './characters.js';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -108,10 +109,10 @@ class App {
   renderMenu(dt) {
     if (this.previewKind === 'char') {
       const t = performance.now() / 1000;
-      this.preview.rotation.y = 0.35 + Math.sin(t * 0.4) * 0.45;
+      this.preview.rotation.y = Math.PI + 0.35 + Math.sin(t * 0.4) * 0.45; // Gesicht zur Kamera
       this.preview.position.y = 0;
       animateSoldier(this.previewSoldier, 0, dt, Math.sin(t * 0.7) * 0.05);
-      this.previewSoldier.userData.upper.position.y += Math.sin(t * 2) * 0.006; // Atmen
+      if (this.previewSoldier.userData.upper) this.previewSoldier.userData.upper.position.y += Math.sin(t * 2) * 0.006; // Atmen
     } else {
       this.preview.rotation.y += dt * 0.5;
       this.preview.position.y = Math.sin(performance.now() / 900) * 0.04;
@@ -626,6 +627,7 @@ class App {
         <div class="row" style="margin-top:10px">Mausempfindlichkeit <input type="range" id="ssens" min="0.2" max="3" step="0.05" value="${st.sens}"><span id="vsens">${st.sens}</span></div>
         <div class="row" style="margin-top:10px">Sichtfeld (FOV) <input type="range" id="sfov" min="60" max="105" step="1" value="${st.fov}"><span id="vfov">${st.fov}°</span></div>
         <div class="row" style="margin-top:10px">Lautstärke <input type="range" id="svol" min="0" max="1" step="0.05" value="${st.volume}"></div>
+        <label class="row" style="margin-top:10px">Sprachausgabe in Zwischensequenzen <input type="checkbox" id="svoice" ${st.voice !== false ? 'checked' : ''} style="width:20px;height:20px"></label>
         <div class="row" style="margin-top:10px">Grafik <select id="squal">${Object.keys(QUALITY).map(q => `<option ${q === st.quality ? 'selected' : ''} value="${q}">${q[0].toUpperCase() + q.slice(1)}</option>`).join('')}</select>
           <span class="dim">Niedrig = maximale FPS (ohne Schatten). Wird nach Neuladen aktiv.</span></div>
       </div>
@@ -635,6 +637,7 @@ class App {
     $('#ssens').oninput = e => { st.sens = +e.target.value; $('#vsens').textContent = st.sens; save(); };
     $('#sfov').oninput = e => { st.fov = +e.target.value; $('#vfov').textContent = st.fov + '°'; save(); };
     $('#svol').oninput = e => { st.volume = +e.target.value; sfx.setVolume(st.volume); save(); };
+    $('#svoice').onchange = e => { st.voice = e.target.checked; save(); };
     $('#squal').onchange = e => { st.quality = e.target.value; save(); if (confirm('Grafik geändert. Jetzt neu laden?')) location.reload(); };
     $('#sreset').onclick = () => { if (confirm('Wirklich den gesamten Fortschritt löschen?')) resetProfile(); };
   }
@@ -646,4 +649,10 @@ function casePreview(c, k, size) { return c.kind === 'char' ? c.preview(k, size)
 function caseOwned(c, k) { return c.kind === 'char' ? c.owned(k) : profile.skins.includes(k); }
 
 Object.assign(App.prototype, characterMenus);
-window.app = new App();
+// Erst die 3D-Charaktere laden, dann das Spiel starten (bei Fehlern geht es mit eigenen Modellen weiter)
+const charLoad = loadCharacters();
+Promise.race([charLoad, new Promise(r => setTimeout(r, 6000))]).finally(() => {
+  window.app = new App();
+  // Kamen die Figuren erst später, Menü-Soldat aktualisieren
+  charLoad.then(() => { if (window.app.previewKind === 'char' && !window.app.previewSoldier?.userData.gltf) window.app.showCharacter(); });
+});

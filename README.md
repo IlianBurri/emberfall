@@ -53,7 +53,7 @@ G Granate · Shift sprinten · C ducken · Leertaste springen · Tab Punktestand
 
 ## Inhalt
 
-- **Story:** 5 Missionen (Hafen, Wüstendorf, Schneebasis, Nachthafen, Glutkern-Werk) mit Zielen wie Eliminieren, Datenkerne sammeln, Störsender zerstören, Zone halten und Bosskampf gegen Kommandant Rostzahn. 3 Schwierigkeitsgrade.
+- **Story:** 8 Missionen mit durchgehender Handlung (Major Vogt, Funkerin Echo, Kommandant Rostzahn) und Zielen wie Eliminieren, Datenkerne sammeln, Störsender zerstören, Zone/Uplink halten, Geisel befreien und eskortieren, Bomben unter Zeitdruck entschärfen und Bosskampf. Vor und nach jeder Mission läuft eine **Zwischensequenz** (Kamerafahrt, Kinobalken, Titelkarte mit Ort/Uhrzeit, Untertitel, optionale Sprachausgabe; Leertaste überspringt). 3 Schwierigkeitsgrade.
 - **Quests:** feste Aufträge + 3 tägliche Aufträge mit Splitter-Belohnung.
 - **Waffen:** Sturmgewehr, MP, DMR, Schrotflinte, LMG, Scharfschützengewehr, Pistole, Reihenfeuerpistole, Revolver – mit Rückstoß, Streuung, Nachladen und Schadensabfall.
 - **Aufsätze:** Visiere (inkl. 4x-Zielfernrohr), Schalldämpfer, Kompensator, Mündungsbremse, Magazine, Griffe, Schäfte.
@@ -74,7 +74,9 @@ G Granate · Shift sprinten · C ducken · Leertaste springen · Tab Punktestand
   Kapseln, extrudierte Profile) und werden pro Teil zu wenigen Geometrien zusammengebacken.
   - `geom.js` – abgerundete Quader, Kapseln, Zusammenbacken, Himmels-Spiegelungen (PBR-Umgebung)
   - `weapon.js` – Waffen (PBR: Polymer, eloxiertes Metall, Stahl, Gummi, Glas), Hände in der Ego-Ansicht
-  - `actors.js` – Soldaten mit menschlichen Proportionen, Gegner-KI
+  - `characters.js` – animierte 3D-Figur „SWAT“ (Quaternius, CC0, siehe `client/assets/models/LICENSE.txt`): Skelett-Animationen, Einfärbung je Outfit/Fraktion, alle Teile zu 1 Mesh verschmolzen
+  - `actors.js` – Gegner-KI; eigene prozedurale Soldaten als Rückfall, falls das Modell nicht lädt
+  - `cinematic.js` – Zwischensequenzen
   - `vehicles.js` – Autos (Limousine, Kompakt, Pickup, Transporter); alle Autos einer Map = 4 Draw Calls
   - `terrain.js` / `outskirts.js` – Höhenkarte, Straßennetz, Orte, Vegetation im Umland
   - Statische Stadt = eine InstancedMesh, Partikel/Leuchtspuren/Hülsen je ein Draw Call. Grafikstufe „Niedrig“ schaltet Schatten ab.

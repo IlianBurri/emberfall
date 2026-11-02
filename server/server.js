@@ -20,7 +20,7 @@ const OPEN_BROWSER = !args.includes('--no-open') && !CLOUD;
 
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
-  '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon',
+  '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.glb': 'model/gltf-binary', '.txt': 'text/plain; charset=utf-8',
 };
 const ADDONS = path.join(ROOT, 'node_modules/three/examples/jsm');
 const STATIC = {

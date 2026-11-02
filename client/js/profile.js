@@ -91,7 +91,8 @@ export function skinDef(key) {
 }
 
 export function missionUnlocked(i) {
-  return i === 0 || !!profile.missions[MISSIONS[i - 1].id]?.done;
+  // frei, wenn die vorige Mission geschafft ist (oder diese schon früher geschafft wurde)
+  return i === 0 || !!profile.missions[MISSIONS[i - 1].id]?.done || !!profile.missions[MISSIONS[i].id]?.done;
 }
 
 // ---------------------------------------------------------------- Quests
