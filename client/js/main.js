@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { WEAPONS, ATTACHMENTS, ATTACH_SLOTS, SKINS, RARITY, PATTERNS, CASES, MISSIONS, MAPS, CHAR_ITEMS, levelInfo } from './data.js';
 import {
   profile, save, addCredits, addXP, spend, build, skinDef, missionUnlocked, track, allQuests, questState, claimQuest,
-  claimableCount, setToast, onProfileChange, resetProfile,
+  claimableCount, setToast, onProfileChange, resetProfile, bpInfo,
 } from './profile.js';
 import { buildGunModel, weaponStats } from './weapon.js';
 import { skinPreviewCanvas } from './skins.js';
@@ -12,16 +12,28 @@ import { net } from './net.js';
 import * as sfx from './audio.js';
 import { characterMenus, cheatPanel, charCase } from './charmenu.js';
 import { lookFromProfile } from './profile.js';
-import { animateSoldier } from './actors.js';
+import { MenuStage } from './menustage.js';
+import { battlePassMenus, bpClaimableCount, playerEmblem, playerBanner } from './battlepass.js';
 import { loadCharacters } from './characters.js';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const QUALITY = {
   niedrig: { ratio: 0.7, shadows: false, shadowSize: 512, aa: false },
-  mittel: { ratio: 1, shadows: true, shadowSize: 1024, aa: false },
+  mittel: { ratio: Math.min(devicePixelRatio, 1.5), shadows: true, shadowSize: 1024, aa: true }, // schärfer auf HiDPI-Displays
   hoch: { ratio: Math.min(devicePixelRatio, 2), shadows: true, shadowSize: 2048, aa: true },
 };
+
+// Linke Navigation: Bereiche und ihre Unterseiten (alle vorhandenen Menüs bleiben erreichbar)
+const NAV = [
+  { id: 'play', label: 'Spielen', icon: '▶', sub: [['story', 'Kampagne'], ['lobby', 'Koop & PvP']], hidden: ['roomsView', 'roomView'] },
+  { id: 'loadout', label: 'Loadout', icon: '🪖', sub: [['charakter', 'Charakter'], ['loadout', 'Waffen']] },
+  { id: 'armory', label: 'Arsenal', icon: '🛒', sub: [['shop', 'Shop'], ['cases', 'Kisten'], ['skinEditor', 'Skin-Editor']] },
+  { id: 'battlepass', label: 'Battle Pass', icon: '★', sub: [['battlepass', 'Battle Pass']] },
+  { id: 'quests', label: 'Quests', icon: '📜', sub: [['quests', 'Quests']] },
+  { id: 'settings', label: 'Einstellungen', icon: '⚙', sub: [['settings', 'Einstellungen'], ['help', 'Steuerung']] },
+  { id: 'cheats', label: 'Cheats', icon: '🕹', sub: [['cheats', 'Cheats']], when: () => profile.cheatsUnlocked },
+];
 
 class App {
   constructor() {
@@ -36,13 +48,16 @@ class App {
     document.body.prepend(this.renderer.domElement);
     addEventListener('resize', () => {
       this.renderer.setSize(innerWidth, innerHeight);
-      this.menuCam.aspect = innerWidth / innerHeight; this.menuCam.updateProjectionMatrix();
+      this.stage.resize();
+      this.layoutStage();
     });
     this.game = null;
     this.room = null;
-    this.setupMenuScene();
+    // Eigene Menü-Bühne mit eigener Kamera (die Spielwelt wird fürs Menü nicht geladen)
+    this.stage = new MenuStage(this.renderer, this.quality);
+    this.stage.active = true;
     setToast(t => this.toast(t));
-    onProfileChange(() => this.topbar());
+    onProfileChange(() => { this.topbar(); if (!this.game) this.renderNav(); });
     sfx.setVolume(profile.settings.volume);
     addEventListener('pointerdown', () => sfx.initAudio(), { once: false });
     $('#resume').onclick = () => this.game?.lock();
@@ -56,82 +71,67 @@ class App {
     this.topbar();
     this.home();
     $('#loading').remove();
+    // Shortcuts nur im Menü (im Spiel gehören die Tasten dem Spieler)
+    addEventListener('keydown', e => { if (!this.game && e.key === 'Escape' && $('#menu').style.display === 'block' && !$('#modal').style.display.includes('flex')) this.home(); });
     let last = performance.now();
     const loop = now => {
       requestAnimationFrame(loop);
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       if (this.game && !this.game.ended) { this.game.update(dt); if (this.game && !this.game.ended) this.game.render(); }
-      else this.renderMenu(dt);
+      else this.stage.render(dt);
     };
     requestAnimationFrame(loop);
   }
 
-  // ------------------------------------------------------------ Menü-Hintergrund mit Waffenvorschau
-  setupMenuScene() {
-    const s = new THREE.Scene();
-    s.background = new THREE.Color('#141c2e');
-    s.fog = new THREE.Fog('#141c2e', 4, 12);
-    s.add(new THREE.HemisphereLight('#bcd8ff', '#3a2a20', 1.6));
-    const d = new THREE.DirectionalLight('#ffe8c8', 2.2); d.position.set(2, 3, 2); s.add(d);
-    const r = new THREE.DirectionalLight('#ff7a1a', 1.2); r.position.set(-3, 1, -2); s.add(r);
-    const floor = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.8, 0.2, 8), new THREE.MeshLambertMaterial({ color: '#232c42', flatShading: true }));
-    floor.position.set(0, -0.75, 0); s.add(floor);
-    for (let i = 0; i < 40; i++) {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial({ color: new THREE.Color().setHSL(0.07 + Math.random() * 0.06, 0.6, 0.25 + Math.random() * 0.2) }));
-      const a = Math.PI + Math.random() * Math.PI, rad = 3 + Math.random() * 5;
-      m.position.set(Math.cos(a) * rad, -0.8 + Math.random() * 0.5, Math.sin(a) * rad - 2);
-      m.scale.set(0.4 + Math.random(), 0.3 + Math.random() * 2, 0.4 + Math.random());
-      m.rotation.y = Math.random() * 3;
-      s.add(m);
-    }
-    this.menuScene = s;
-    this.menuCam = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 50);
-    this.menuCam.position.set(-0.9, 0.35, 3.0);
-    this.menuCam.lookAt(0, 0, 0);
-    this.preview = new THREE.Group();
-    s.add(this.preview);
-    this.showWeapon(profile.loadout.primary);
-  }
+  // ------------------------------------------------------------ Menü-Bühne
   showWeapon(id, b = build(id), skin = skinDef(profile.weaponSkin[id])) {
-    this.preview.clear();
-    this.previewKind = 'weapon';
-    this.menuCam.position.set(-0.9, 0.35, 3.0);
-    this.menuCam.lookAt(0, 0, 0);
-    const g = buildGunModel(id, b, skin);
-    g.scale.setScalar(1.7);
-    g.position.set(0, 0, 0.6);
-    const box = new THREE.Box3().setFromObject(g);
-    const c = box.getCenter(new THREE.Vector3());
-    g.position.sub(c);
-    this.preview.add(g);
+    this.stage.showWeapon(id, b, skin);
   }
-  renderMenu(dt) {
-    if (this.previewKind === 'char') {
-      const t = performance.now() / 1000;
-      this.preview.rotation.y = Math.PI + 0.35 + Math.sin(t * 0.4) * 0.45; // Gesicht zur Kamera
-      this.preview.position.y = 0;
-      animateSoldier(this.previewSoldier, 0, dt, Math.sin(t * 0.7) * 0.05);
-      if (this.previewSoldier.userData.upper) this.previewSoldier.userData.upper.position.y += Math.sin(t * 2) * 0.006; // Atmen
-    } else {
-      this.preview.rotation.y += dt * 0.5;
-      this.preview.position.y = Math.sin(performance.now() / 900) * 0.04;
+  previewSkin(skin) { this.showWeapon(profile.loadout.primary, build(profile.loadout.primary), skin); }
+  // Figur rechts neben Navigation/Panel platzieren (Mitte des freien Bereichs)
+  layoutStage() {
+    const W = innerWidth;
+    let left = 0;
+    if (W > 860) {
+      const nav = $('#nav').getBoundingClientRect();
+      left = nav.right;
+      const m = $('#menu');
+      if (m.style.display === 'block') left = m.getBoundingClientRect().right + 10;
     }
-    // Waffe rechts vom Menü platzieren
-    const panelW = $('#menu').offsetWidth + 22;
-    const frac = Math.min(0.8, (panelW + (innerWidth - panelW) / 2) / innerWidth);
-    this.menuCam.setViewOffset(innerWidth, innerHeight, (0.5 - frac) * innerWidth, 0, innerWidth, innerHeight);
-    this.renderer.render(this.menuScene, this.menuCam);
+    const fx = Math.min(0.9, Math.max(0.5, (left + W) / 2 / W));
+    this.stage.setScreenX(fx, (W - left) / W);
   }
 
   topbar() {
     const L = levelInfo(profile.xp);
-    const q = claimableCount();
+    const B = bpInfo();
+    const em = playerEmblem(), bn = playerBanner();
     $('#topbar').innerHTML = `<div class="logo">EMBER<span>FALL</span></div><div class="spacer"></div>
-      <div class="chip">${esc(profile.name)}</div>
-      <div class="chip">Stufe ${L.lvl} · ${L.rank}<span class="xpbar"><i style="width:${(L.rest / L.need * 100).toFixed(0)}%"></i></span></div>
-      <div class="chip credits">◆ ${profile.credits} Splitter</div>${q ? `<div class="chip" style="color:#5dff8a">${q} Quest${q > 1 ? 's' : ''} abholbereit</div>` : ''}`;
+      <div class="chip btn hide-s" data-top="battlepass" title="Battle Pass">★ <span>PASS</span> <b>${B.lvl}</b><span class="xpbar"><i style="width:${(B.maxed ? 100 : B.rest / B.need * 100).toFixed(0)}%"></i></span></div>
+      <div class="chip btn" data-top="settings" title="Profil & Einstellungen"><span class="emb" style="background:linear-gradient(135deg,${bn.colors[0]},${bn.colors[1]})">${em.icon}</span><span class="nm">${esc(profile.name)}</span></div>
+      <div class="chip" title="${L.rest} / ${L.need} XP"><span class="lv">${L.lvl}</span><span class="hide-s">${L.rank}</span><span class="xpbar hide-s"><i style="width:${(L.rest / L.need * 100).toFixed(0)}%"></i></span><small class="hide-s">${L.rest}/${L.need} XP</small></div>
+      <div class="chip btn credits" data-top="shop" title="Splitter (Ingame-Währung)">◆ ${profile.credits}</div>`;
+    $('#topbar').querySelectorAll('[data-top]').forEach(b => b.onclick = () => { if (this.game) return; sfx.sfxUI(); this[b.dataset.top](); });
   }
+
+  // Linke Navigation (Spielen / Loadout / Arsenal / Battle Pass / Quests / Einstellungen)
+  renderNav() {
+    const nav = $('#nav');
+    const q = claimableCount(), bpc = bpClaimableCount();
+    const badge = { quests: q, battlepass: bpc };
+    const em = playerEmblem(), bn = playerBanner(), L = levelInfo(profile.xp);
+    nav.innerHTML = NAV.filter(n => !n.when || n.when()).map(n => `<button class="item ${n.id === 'play' ? 'play' : ''} ${this.navSection === n.id ? 'on' : ''}" data-nav="${n.id}"><i>${n.icon}</i>${n.label.toUpperCase()}${badge[n.id] ? `<span class="badge">${badge[n.id]}</span>` : ''}</button>`).join('')
+      + `<div class="grow"></div><div class="pcard" data-nav="battlepass" style="background:linear-gradient(120deg,${bn.colors[0]},${bn.colors[1]})"><div class="e">${em.icon}</div><div><b>${esc(profile.name)}</b><small>Stufe ${L.lvl} · ${L.rank}</small></div></div>`;
+    nav.querySelectorAll('[data-nav]').forEach(b => b.onclick = () => {
+      sfx.sfxUI();
+      const sec = NAV.find(n => n.id === b.dataset.nav);
+      // Aktiven Bereich erneut anklicken = Panel schließen
+      if (this.navSection === sec.id && $('#menu').style.display === 'block' && !b.classList.contains('pcard')) return this.home();
+      this[sec.sub[0][0]]();
+    });
+  }
+
   toast(text) {
     const d = document.createElement('div');
     d.textContent = text;
@@ -140,34 +140,44 @@ class App {
   }
   menu(html, wide = false) {
     const m = $('#menu');
+    const wasOpen = m.style.display === 'block';
+    const sameFn = this.lastFn === this.navFn;
     m.style.display = 'block';
-    m.className = wide ? 'wide' : '';
-    m.innerHTML = html;
-    m.scrollTop = 0;
+    m.className = (wide ? 'wide' : '') + (wasOpen ? '' : ' open');
+    const sec = NAV.find(n => n.id === this.navSection);
+    const tabs = sec ? `<div class="subtabs">${sec.sub.map(([fn, label]) => `<button class="${fn === this.navFn || (sec.hidden || []).includes(this.navFn) && fn === 'lobby' ? 'on' : ''}" data-sub="${fn}">${label}</button>`).join('')}<button class="x" data-go="home" title="Schließen (Esc)">✕</button></div>` : '';
+    const scroll = m.scrollTop;
+    m.innerHTML = tabs + html;
+    m.scrollTop = sameFn ? scroll : 0; // beim Aktualisieren derselben Seite nicht nach oben springen
+    this.lastFn = this.navFn;
     m.querySelectorAll('[data-go]').forEach(b => b.onclick = () => { sfx.sfxUI(); this[b.dataset.go](); });
+    m.querySelectorAll('[data-sub]').forEach(b => b.onclick = () => { sfx.sfxUI(); this[b.dataset.sub](); });
+    $('#homeinfo').style.display = 'none';
+    this.renderNav();
+    this.layoutStage();
     return m;
   }
 
   // ------------------------------------------------------------ Hauptmenü
+  // Startseite: nur Navigation + Charakter, rechts unten kompakte Karten (Weiterspielen, Battle Pass, Quests)
   home() {
+    this.navSection = null; this.navFn = null; this.lastFn = null;
+    this.inLobby = false; this.inRoom = false;
+    $('#menu').style.display = 'none';
+    $('#modal').style.display = 'none';
     this.showCharacter();
-    const q = claimableCount();
-    this.menu(`<h2>Hauptquartier Morgenrot</h2>
-      <p class="dim">Das Rost-Syndikat baut eine Superwaffe – den Glutkern. Halte sie auf: allein, im Team oder trainiere gegen Freunde im LAN.</p>
-      <div class="navgrid">
-        <button class="big primary" data-go="story">▶ Story-Kampagne<small style="color:#4a2000">5 Missionen gegen das Rost-Syndikat</small></button>
-        <button data-go="lobby">🤝 Koop & LAN-PvP<small>Mit Freunden im selben Netzwerk</small></button>
-        <button data-go="quests">📜 Quests${q ? `<span class="badge">${q}</span>` : ''}<small>Aufträge & Tagesaufträge</small></button>
-        <button data-go="charakter">🪖 Charakter<small>Outfit anpassen & freischalten</small></button>
-        <button data-go="loadout">🔧 Waffenschmiede<small>Loadout, Aufsätze, Skins</small></button>
-        <button data-go="skinEditor">🎨 Skin-Editor<small>Eigene Lackierungen</small></button>
-        <button data-go="shop">🛒 Shop<small>Waffen, Aufsätze, Ausrüstung, Codes</small></button>
-        <button data-go="cases">📦 Waffenkisten<small>Skins mit Splittern</small></button>
-        <button data-go="settings">⚙ Einstellungen<small>Steuerung, Grafik, Name</small></button>
-        <button data-go="help">❓ Steuerung<small>Tasten & Tipps</small></button>
-        ${profile.cheatsUnlocked ? '<button data-go="cheats">🕹 Cheats<small>Wallhack, Aimbot & mehr</small></button>' : ''}
-      </div>
-      <p class="dim" style="margin-top:14px">Alle Belohnungen gibt es nur im Spiel – kein Echtgeld. Fortschritt wird in diesem Browser gespeichert.</p>`);
+    const next = MISSIONS.findIndex((m, i) => missionUnlocked(i) && !profile.missions[m.id]?.done);
+    const mis = MISSIONS[next < 0 ? MISSIONS.length - 1 : next];
+    const B = bpInfo(), bpc = bpClaimableCount(), q = claimableCount();
+    const hi = $('#homeinfo');
+    hi.style.display = 'flex';
+    hi.innerHTML = `
+      <div class="hc" data-h="story"><small>${next < 0 ? 'Kampagne abgeschlossen' : 'Weiter in der Kampagne'}</small><b>${MISSIONS.indexOf(mis) + 1}. ${esc(mis.name)}</b><span class="dim">${esc(MAPS[mis.map].name)} · ${mis.reward} ◆</span></div>
+      <div class="hc" data-h="battlepass"><small>Battle Pass · Stufe ${B.lvl}/${B.max}</small><b>${bpc ? `${bpc} Belohnung${bpc > 1 ? 'en' : ''} abholbereit` : B.maxed ? 'Alles freigeschaltet' : `${B.need - B.rest} XP bis Stufe ${B.lvl + 1}`}</b><div class="bp-bar" style="margin:0"><i style="width:${(B.maxed ? 100 : B.rest / B.need * 100).toFixed(0)}%"></i></div></div>
+      <div class="hc" data-h="quests"><small>Quests</small><b>${q ? `${q} Quest${q > 1 ? 's' : ''} abholbereit` : 'Tagesaufträge ansehen'}</b><span class="dim">Alle Belohnungen nur im Spiel – kein Echtgeld.</span></div>`;
+    hi.querySelectorAll('[data-h]').forEach(c => c.onclick = () => { sfx.sfxUI(); this[c.dataset.h](); });
+    this.renderNav();
+    this.layoutStage();
   }
 
   help() {
@@ -209,8 +219,15 @@ class App {
     this.inLobby = false; this.inRoom = false;
     $('#menu').style.display = 'none';
     $('#topbar').style.display = 'none';
+    $('#nav').style.display = 'none';
+    $('#homeinfo').style.display = 'none';
+    // Kurze Abblende: Menü-Bühne aus, Spielkamera übernimmt (Pointer-Lock bleibt im Klick-Ereignis)
+    const fade = $('#fade');
+    fade.style.transition = 'none'; fade.style.opacity = '1';
+    this.stage.active = false;
     this.game = new Game(this, opts);
     this.game.lock();
+    requestAnimationFrame(() => requestAnimationFrame(() => { fade.style.transition = ''; fade.style.opacity = '0'; }));
   }
 
   showPause(show) {
@@ -223,8 +240,11 @@ class App {
 
   onGameEnd(r) {
     this.game = null;
+    this.stage.active = true;
     this.showPause(false);
     $('#topbar').style.display = 'flex';
+    $('#nav').style.display = 'flex';
+    this.navSection = 'play'; this.navFn = 'story';
     let html = '';
     if (r.type === 'mission') {
       const st = r.stats;
@@ -648,11 +668,19 @@ function caseDef(c, k) { return c.kind === 'char' ? c.def(k) : SKINS[k]; }
 function casePreview(c, k, size) { return c.kind === 'char' ? c.preview(k, size) : skinPreviewCanvas(SKINS[k], size); }
 function caseOwned(c, k) { return c.kind === 'char' ? c.owned(k) : profile.skins.includes(k); }
 
-Object.assign(App.prototype, characterMenus);
-// Erst die 3D-Charaktere laden, dann das Spiel starten (bei Fehlern geht es mit eigenen Modellen weiter)
+Object.assign(App.prototype, characterMenus, battlePassMenus);
+// Jede Menüseite merkt sich ihren Navigationsbereich (für aktive Markierung und Unter-Reiter)
+for (const sec of NAV) for (const fn of [...sec.sub.map(x => x[0]), ...(sec.hidden || [])]) {
+  const orig = App.prototype[fn];
+  App.prototype[fn] = function (...a) { this.navSection = sec.id; this.navFn = fn; return orig.apply(this, a); };
+}
+// Erst die 3D-Charaktere laden, dann das Spiel starten (bei Fehlern/Langsamkeit geht es mit eigenen Modellen weiter)
 const charLoad = loadCharacters();
 Promise.race([charLoad, new Promise(r => setTimeout(r, 6000))]).finally(() => {
   window.app = new App();
-  // Kamen die Figuren erst später, Menü-Soldat aktualisieren
-  charLoad.then(() => { if (window.app.previewKind === 'char' && !window.app.previewSoldier?.userData.gltf) window.app.showCharacter(); });
+  // Kamen die Figuren erst später: Soldat auf der Menü-Bühne neu aufbauen
+  charLoad.then(() => {
+    const st = window.app.stage;
+    if (st.mode === 'char' && !st.soldier?.userData.gltf) { st.charKey = null; window.app.showCharacter(); }
+  });
 });

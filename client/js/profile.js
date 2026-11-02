@@ -1,5 +1,5 @@
 // Lokaler Spielstand (localStorage): Währung, XP, Besitz, Loadout, Skins, Quests, Einstellungen.
-import { WEAPONS, ATTACHMENTS, SKINS, QUESTS, DAILY_TEMPLATES, MISSIONS, CHAR_ITEMS, DEFAULT_CHAR, levelInfo } from './data.js';
+import { WEAPONS, ATTACHMENTS, SKINS, QUESTS, DAILY_TEMPLATES, MISSIONS, CHAR_ITEMS, DEFAULT_CHAR, BATTLE_PASS, levelInfo } from './data.js';
 
 const KEY = 'glutkern-profil-v1';
 
@@ -29,7 +29,12 @@ function defaults() {
     charItems: [],   // gekaufte / gezogene Ausrüstung
     cheatsUnlocked: false,
     cheats: { ...DEFAULT_CHEATS },
+    bp: defaultBp(),
   };
+}
+// Battle-Pass-Fortschritt. Lokal im Browser – kein sicheres Online-Fortschrittssystem.
+function defaultBp() {
+  return { season: BATTLE_PASS.id, xp: 0, claimed: { free: [], premium: [] }, premium: false, boost: 0, owned: ['em_funke', 'bn_standard'], emblem: 'em_funke', banner: 'bn_standard' };
 }
 
 function load() {
@@ -38,7 +43,8 @@ function load() {
     if (raw) {
       const d = defaults();
       const p = JSON.parse(raw);
-      return { ...d, ...p, settings: { ...d.settings, ...p.settings }, stats: { ...d.stats, ...p.stats }, character: { ...d.character, ...p.character }, cheats: { ...d.cheats, ...p.cheats } };
+      return { ...d, ...p, settings: { ...d.settings, ...p.settings }, stats: { ...d.stats, ...p.stats }, character: { ...d.character, ...p.character }, cheats: { ...d.cheats, ...p.cheats },
+        bp: p.bp && p.bp.season === BATTLE_PASS.id ? { ...d.bp, ...p.bp, claimed: { ...d.bp.claimed, ...p.bp.claimed } } : d.bp };
     }
   } catch { /* kaputter Spielstand -> neu */ }
   return defaults();
@@ -69,6 +75,7 @@ export function spend(n) {
   return true;
 }
 export function addXP(n) {
+  addBpXP(n, true); // jede gespielte Runde zählt auch für den Battle Pass
   const before = levelInfo(profile.xp).lvl;
   profile.xp += Math.round(n);
   const after = levelInfo(profile.xp);
@@ -77,6 +84,27 @@ export function addXP(n) {
     profile.credits += after.lvl * 50;
   }
   save();
+}
+
+// ---------------------------------------------------------------- Battle Pass (Fortschritt)
+// Stufe 1 hat man von Anfang an; jede weitere Stufe kostet BATTLE_PASS.xpPerLevel XP.
+export function bpInfo(xp = profile.bp.xp) {
+  const per = BATTLE_PASS.xpPerLevel, max = BATTLE_PASS.levels;
+  const lvl = Math.min(max, 1 + Math.floor(xp / per));
+  const maxed = lvl >= max;
+  return { lvl, max, maxed, rest: maxed ? per : xp % per, need: per, total: xp };
+}
+// round = XP aus einer gespielten Runde (nur dann wirkt und verbraucht sich ein XP-Booster)
+export function addBpXP(n, round = false) {
+  n = Math.max(0, Math.round(n));
+  if (!n) return;
+  const bp = profile.bp;
+  let gain = n;
+  if (round && bp.boost > 0) { gain = Math.round(n * 1.25); bp.boost--; }
+  const before = bpInfo().lvl;
+  bp.xp = Math.min(bp.xp + gain, (BATTLE_PASS.levels - 1) * BATTLE_PASS.xpPerLevel);
+  const after = bpInfo().lvl;
+  if (after > before) toastFn(`Battle Pass: Stufe ${after} erreicht – Belohnung abholbereit!`);
 }
 
 export function build(weaponId) {
@@ -143,6 +171,7 @@ export function claimQuest(q) {
   const st = questState(q);
   if (st.claimed || st.p < q.goal) return;
   st.claimed = true;
+  addBpXP(q.daily ? 400 : 250);
   addCredits(q.reward, q.name);
 }
 export function claimableCount() {

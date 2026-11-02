@@ -2,7 +2,6 @@
 import * as THREE from 'three';
 import { CHAR_ITEMS, CHAR_SLOTS, CHAR_CASE, CHEAT_CODE, MISSIONS, RARITY } from './data.js';
 import { profile, save, spend, ownsChar, lookFromProfile, DEFAULT_CHEATS } from './profile.js';
-import { makeSoldier, animateSoldier } from './actors.js';
 import { net } from './net.js';
 import * as sfx from './audio.js';
 
@@ -29,24 +28,20 @@ export function charSwatch(item, size = 56) {
 
 function unlockText(it) {
   if (it.free) return 'Gratis';
+  if (it.bp) return `Battle Pass Stufe ${it.bp}${it.premium ? ' (Premium)' : ''}`;
   if (it.mission) return `Mission „${MISSIONS.find(m => m.id === it.mission)?.name}“ schaffen`;
   if (it.case) return 'Nur aus der Ausrüstungskiste';
   return `${it.price} ◆`;
 }
 
 export const characterMenus = {
-  // Soldat statt Waffe im Menü-Hintergrund
+  // Soldat auf der Menü-Bühne (steht immer frontal zur Kamera, siehe menustage.js)
   showCharacter(look = lookFromProfile()) {
-    this.preview.clear();
-    const m = makeSoldier(look.color, { ...look, gun: profile.loadout.primary });
-    m.scale.setScalar(0.95);
-    m.position.set(0, -0.65, 0.2);
-    this.preview.add(m);
-    this.previewKind = 'char';
-    this.previewSoldier = m;
-    this.preview.rotation.y = 0.35;
-    this.menuCam.position.set(-1.3, 0.45, 4.6);
-    this.menuCam.lookAt(0, 0.22, 0);
+    this.stage.showCharacter(look, profile.loadout.primary);
+  },
+  // Vorschau: ein Ausrüstungsteil anprobieren, ohne es anzulegen
+  previewOutfit(slot, id) {
+    this.showCharacter(lookFromProfile({ ...profile.character, [slot]: id }));
   },
 
   charakter(slot = this.charSlot || 'uniform') {

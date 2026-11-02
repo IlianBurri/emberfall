@@ -112,6 +112,14 @@ export const SKINS = {
   polarlicht: { id: 'polarlicht', name: 'Polarlicht', rarity: 'legendary', base: '#2bffb8', accent: '#7a2bff', pattern: 'gradient', glow: 0.9 },
   goldrausch: { id: 'goldrausch', name: 'Goldrausch', rarity: 'legendary', base: '#ffcc33', accent: '#b37400', pattern: 'zigzag', glow: 0.5 },
   galaxie: { id: 'galaxie', name: 'Galaxie', rarity: 'legendary', base: '#0b0630', accent: '#c8b6ff', pattern: 'dots', glow: 0.9 },
+  // Battle Pass „Glutfunken“ (nur über den Pass, nicht in Kisten)
+  bp_asche: { id: 'bp_asche', name: 'Aschegrau', rarity: 'common', base: '#5a5c60', accent: '#2c2d30', pattern: 'digital', bp: true },
+  bp_funkenflug: { id: 'bp_funkenflug', name: 'Funkenflug', rarity: 'rare', base: '#2a2420', accent: '#ff8a2a', pattern: 'dots', glow: 0.3, bp: true },
+  bp_morgenrot: { id: 'bp_morgenrot', name: 'Morgenrot', rarity: 'epic', base: '#ff6a3a', accent: '#3a1a5a', pattern: 'gradient', bp: true },
+  bp_schmiede: { id: 'bp_schmiede', name: 'Schmiedeglut', rarity: 'legendary', base: '#1a0e08', accent: '#ff7a1a', pattern: 'zigzag', glow: 0.9, bp: true },
+  bp_obsidian: { id: 'bp_obsidian', name: 'Obsidian', rarity: 'rare', base: '#121318', accent: '#4a3a6a', pattern: 'hex', bp: true, premium: true },
+  bp_lavastrom: { id: 'bp_lavastrom', name: 'Lavastrom', rarity: 'epic', base: '#2a0a04', accent: '#ffb02e', pattern: 'tiger', glow: 0.7, bp: true, premium: true },
+  bp_phoenix: { id: 'bp_phoenix', name: 'Phönixfeder', rarity: 'legendary', base: '#ffd23a', accent: '#c8301a', pattern: 'gradient', glow: 0.8, bp: true, premium: true },
 };
 
 export const CASES = {
@@ -183,7 +191,21 @@ export const CHAR_ITEMS = {
   f_3: { slot: 'face', name: 'Oliv', rarity: 'common', color: '#b88a5a', free: true },
   f_4: { slot: 'face', name: 'Braun', rarity: 'common', color: '#8a5a3a', free: true },
   f_5: { slot: 'face', name: 'Dunkel', rarity: 'common', color: '#5a3a24', free: true },
+  // Battle Pass „Glutfunken“ (bp = Stufe im Pass)
+  u_funke: { slot: 'uniform', name: 'Funkenträger', rarity: 'rare', color: '#5a3424', bp: 8 },
+  p_asche: { slot: 'pants', name: 'Asche-Cargo', rarity: 'common', color: '#3c3e42', bp: 3 },
+  m_asche: { slot: 'mask', name: 'Ascheschal', rarity: 'rare', shape: 'bandana', color: '#4a4c50', bp: 18 },
+  e_glut: { slot: 'eyes', name: 'Glutglas', rarity: 'rare', color: '#ff6a1a', bp: 25 },
+  h_glutbarett: { slot: 'headgear', name: 'Glutbarett', rarity: 'epic', shape: 'beret', color: '#c84a14', bp: 35 },
+  v_schmied: { slot: 'vest', name: 'Schmiedepanzer', rarity: 'epic', color: '#4a3a2c', bp: 42 },
+  u_obsidian: { slot: 'uniform', name: 'Obsidian-Uniform', rarity: 'epic', color: '#16171c', bp: 10, premium: true },
+  h_phoenix: { slot: 'headgear', name: 'Phönixhelm', rarity: 'legendary', shape: 'nvg', color: '#c8301a', bp: 50, premium: true },
 };
+
+// ---------------------------------------------------------------- Battle Pass
+// Konfigurierbar: Stufenzahl und XP pro Stufe. Belohnungen stehen in battlepass.js.
+// premiumPrice: Preis in Splittern (Ingame-Währung). Kaufbar erst, wenn alle Stufen erreicht sind.
+export const BATTLE_PASS = { id: 's1', name: 'Saison 1 – Glutfunken', levels: 50, xpPerLevel: 1000, premiumPrice: 10000 };
 export const DEFAULT_CHAR = { uniform: 'u_oliv', pants: 'p_oliv', vest: 'v_oliv', headgear: 'h_helm', mask: 'm_none', eyes: 'e_blau', face: 'f_2' };
 export const CHAR_CASE = {
   id: 'ausruestung', name: 'Ausrüstungskiste', price: 500, color: '#c8a050', desc: 'Outfits für deinen Soldaten – manche gibt es nur hier.',
