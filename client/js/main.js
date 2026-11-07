@@ -43,7 +43,7 @@ class App {
     this.renderer.setPixelRatio(this.quality.ratio);
     this.renderer.setSize(innerWidth, innerHeight);
     this.renderer.shadowMap.enabled = this.quality.shadows;
-    this.renderer.shadowMap.type = this.quality.aa ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.25;
     document.body.prepend(this.renderer.domElement);
